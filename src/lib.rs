@@ -16,24 +16,97 @@ use std::collections::HashMap;
 use std::error;
 use std::fmt;
 
+
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum SPItem<'a> {
-    Node(SPNode<'a>),
+    Model(Model<'a>),
     Resource(Resource<'a>),
     Message(Message<'a>),
     Topic(Topic<'a>),
     Variable(Variable<'a>),
-    //Operation(Operation<'a>),
+    Operation(Operation<'a>),
     Ability(Ability<'a>),
     Transition(Transition<'a>),
     //SOP(SOP),
 }
 
-#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
+impl<'a> SPItem<'a> {
+    pub fn name(&self) -> &str {
+        &self.node().name
+    }
+    pub fn node(&self) -> &SPNode {
+        match self {
+            SPItem::Model(x) => &x.node,
+            SPItem::Resource(x) => &x.node,
+            SPItem::Message(x) => &x.node,
+            SPItem::Topic(x) => &x.node,
+            SPItem::Variable(x) => &x.node,
+            SPItem::Operation(x) => &x.node,
+            SPItem::Ability(x) => &x.node,
+            SPItem::Transition(x) => &x.node,
+        }
+    }
+    fn node_mut(&'a mut self) -> &'a mut SPNode {
+        match self {
+            SPItem::Model(x) => &mut x.node,
+            SPItem::Resource(x) => &mut x.node,
+            SPItem::Message(x) => &mut x.node,
+            SPItem::Topic(x) => &mut x.node,
+            SPItem::Variable(x) => &mut x.node,
+            SPItem::Operation(x) => &mut x.node,
+            SPItem::Ability(x) => &mut x.node,
+            SPItem::Transition(x) => &mut x.node,
+        }
+    }
+    pub fn upd_parent(&'a mut self, parent: &'a SPItem) {
+        self.node_mut().upd_parent(parent)
+    }
+}
+
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct SPNode<'a> {
     name: String,
     #[serde(skip)]
     parent: Option<&'a SPItem<'a>>,
+}
+
+impl<'a> SPNode<'a> {
+    pub fn new(name: &str) -> SPNode<'a> {
+        SPNode {
+            name: name.to_string(),
+            parent: None,
+        }
+    }
+
+    pub fn parent(&self) -> Option<&'a SPItem> {
+        self.parent.clone()
+    }
+
+    pub fn upd_parent(&mut self, parent: &'a SPItem) {
+        self.parent = Some(parent);
+    }
+}
+
+// Never clone the parent since we do not want to point to another model
+impl Clone for SPNode<'_> {
+    fn clone(&self) -> Self {
+        SPNode::new(&self.name)
+    }
+}
+
+impl std::fmt::Display for SPNode<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.parent() {
+            Some(p) => write!(f, "name:{}, p({})", self.name, p.name()),
+            None => write!(f, "name:{}", self.name),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
+pub struct Model<'a> {
+    node: SPNode<'a>,
+    items: Vec<SPItem<'a>>
 }
 
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
@@ -85,6 +158,7 @@ pub enum VariableType {
     Estimated,
     Command,
     Parameter(Option<SPPath>),
+    Predicate(Predicate)
 }
 
 impl<'a> Default for VariableType {
@@ -104,7 +178,34 @@ pub struct Transition<'a> {
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Ability<'a> {
     node: SPNode<'a>,
+    controlled: Vec<Transition<'a>>,
+    uncontrolled: Vec<Transition<'a>>,
+    predicates: Vec<Variable<'a>>
 }
+
+#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
+pub struct Operation<'a> {
+    node: SPNode<'a>,
+    precondition: Vec<Transition<'a>>,
+    postcondition: Vec<Transition<'a>>,
+    uncontrolled: Vec<Transition<'a>>,
+    predicates: Vec<Variable<'a>>,
+    goal: IfThen<'a>,
+    invariant: IfThen<'a>,
+
+}
+
+/// An IfThen is used by operaitons to define goals or invariants. When the if_
+/// predicate is true, then the then_ predicate is either a goal or an invariant
+/// that the planner will use for planning. TODO: Maybe we should have a better name?
+#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
+pub struct IfThen<'a> {
+    node: SPNode<'a>,
+    if_: Predicate,
+    then_: Predicate,
+}
+
+
 
 /// The SPPath is used for identifying all objects in a model. The path will be defined
 /// based on where the item is in the model hierarchy
@@ -224,6 +325,37 @@ impl error::Error for SPError {
         None
     }
 }
+
+
+#[cfg(test)]
+mod tests_domain {
+    use super::*;
+    #[test]
+    fn making() {
+        // let mut m = SPItem::Model(Model{
+        //         node: SPNode::new("m"),
+        //         items: vec!()
+        //     });
+        // let n = SPItem::Model(Model{
+        //     node: SPNode::new("n"),
+        //     items: vec!()
+        // });
+
+        // if let SPItem::Model(mut my) = m {
+        //     my.items.push(n);
+        //     my.node.upd_parent(parent: &'a SPItem)
+        // }
+        // m.upd_parent(&n);
+        // m
+
+        // let v = x();
+        
+        // println!("{:?}", v);
+    }
+}
+
+
+
 
 #[cfg(test)]
 mod tests_paths {
