@@ -34,6 +34,23 @@ impl SPItem {
     pub fn name(&self) -> &str {
         &self.node().name
     }
+
+    /// Finds the item with a specific SPPath. If it
+    /// is a global path, only one can exists, if it is 
+    /// a local path, the first one is returned
+    // pub fn find(&self, path: SPPath) -> Option<&SPItem> {
+    //     match self {
+    //         SPItem::Model(x) => &x.find(path),
+    //         SPItem::Resource(x) => &x.find(path),
+    //         SPItem::Message(x) => &x.find(path),
+    //         SPItem::Topic(x) => &x.find(path),
+    //         SPItem::Variable(x) => &x.find(path),
+    //         SPItem::Operation(x) => &x.find(path),
+    //         SPItem::Ability(x) => &x.find(path),
+    //         SPItem::Transition(x) => &x.find(path),
+    //     }
+    // }
+
     pub fn node(&self) -> &SPNode {
         match self {
             SPItem::Model(x) => &x.node,
@@ -155,9 +172,10 @@ impl Model {
         self.items.as_slice()
     }
 
-    pub fn add_item(&mut self, mut item: SPItem) {
-        item.update_path(self.node.local_path(), self.node.global_path());
+    pub fn add_item(&mut self, mut item: SPItem) -> (SPPath, SPPath) {
+        let paths = item.update_path(self.node.local_path(), self.node.global_path());
         self.items.push(item);
+        paths
     }
 
     pub fn update_path(&mut self, mut local: SPPath, mut global: SPPath) -> (SPPath, SPPath) {
@@ -181,15 +199,33 @@ pub struct Resource {
 impl Resource {
     
     pub fn new(name: &str) -> Resource {
-        let node = SPNode::new(name);
+        let mut node = SPNode::new(name);
+        node.update_path(SPPath::new_local(), SPPath::NoPath);
         Resource {
             node,
             ..Resource::default()
         }
     }
+
+    pub fn add_ability(&mut self, mut ability: Ability) -> (SPPath, SPPath) {
+        let paths = ability.update_path(self.node.local_path(), self.node.global_path());
+        self.abilities.push(ability);
+        paths
+    }
+    pub fn add_parameter(&mut self, mut parameter: Variable) -> (SPPath, SPPath) {
+        let paths = parameter.update_path(self.node.local_path(), self.node.global_path());
+        self.parameters.push(parameter);
+        paths
+    }
+    pub fn add_message(&mut self, mut message: Topic) -> (SPPath, SPPath) {
+        let paths = message.update_path(self.node.local_path(), self.node.global_path());
+        self.messages.push(message);
+        paths
+    }
     
-    pub fn update_path(&mut self, local: SPPath, global: SPPath) -> (SPPath, SPPath) {
-        let (local, global) = self.node.update_path(local, global);
+    pub fn update_path(&mut self, _local: SPPath, global: SPPath) -> (SPPath, SPPath) {
+        // A resource always create a new local namespace
+        let (local, global) = self.node.update_path(SPPath::new_local(), global);
 
         self.abilities.iter_mut().for_each(|i| {
             i.update_path(local.clone(), global.clone());
@@ -208,11 +244,11 @@ impl Resource {
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Topic {
     node: SPNode,
-    msg: Message,
+    msg: MessageField,
 }
 
 impl Topic {
-    pub fn new(name: &str, msg: Message) -> Topic {
+    pub fn new(name: &str, msg: MessageField) -> Topic {
         let node = SPNode::new(name);
         Topic {
             node,
@@ -230,15 +266,15 @@ impl Topic {
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Message {
     node: SPNode,
-    fields: Vec<(String, MessageFields)>,
+    fields: Vec<(String, MessageField)>,
 }
 
 impl Message {
-    pub fn new(name: &str) -> Message {
+    pub fn new(name: &str, fields: Vec<(String, MessageField)>) -> Message {
         let node = SPNode::new(name);
         Message {
             node,
-            fields: vec!()
+            fields
         }
     }
 
@@ -252,48 +288,63 @@ impl Message {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub enum MessageFields {
+pub enum MessageField {
     Msg(Message),
     Var(Variable),
 }
 
-impl MessageFields {
+impl MessageField {
     pub fn update_path(&mut self, local: SPPath, global: SPPath) -> (SPPath, SPPath) {
         match self {
-            MessageFields::Msg(ref mut x) => x.update_path(local, global),
-            MessageFields::Var(ref mut x) => x.update_path(local, global)
+            MessageField::Msg(ref mut x) => x.update_path(local, global),
+            MessageField::Var(ref mut x) => x.update_path(local, global)
         }
     }
 }
 
-impl Default for MessageFields {
+impl Default for MessageField {
     fn default() -> Self {
-        MessageFields::Var(Variable::default())
+        MessageField::Var(Variable::default())
     }
 }
 
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Variable {
     node: SPNode,
-    pub type_: VariableType,
-    pub initial_value: Option<SPValue>,
-    pub domain: Vec<SPValue>,
+    type_: VariableType,
+    value_type: SPValueType,
+    initial_value: SPValue,
+    domain: Vec<SPValue>,
 }
 
 impl Variable {
     pub fn new(name: &str, 
                 type_: VariableType,
-                initial_value: Option<SPValue>,
+                value_type: SPValueType,
+                initial_value: SPValue,
                 domain: Vec<SPValue>,
-                ) -> Variable {
+    ) -> Variable {
         let node = SPNode::new(name);
         Variable {
             node,
             type_,
+            value_type,
             initial_value,
             domain,
         }
     }
+    pub fn new_boolean(name: &str, 
+                type_: VariableType,
+    ) -> Variable {
+        Variable::new(
+            name,
+            type_,
+            SPValueType::Bool,
+            false.to_spvalue(),
+            vec!(false.to_spvalue(), true.to_spvalue()),
+        )
+    }
+
 
     pub fn update_path(&mut self, local: SPPath, global: SPPath) -> (SPPath, SPPath) {
         self.node.update_path(local, global)
@@ -504,11 +555,14 @@ impl SPPath {
     pub fn new_local() -> SPPath {
         SPPath::LocalPath(vec!())
     }
+    pub fn new_global() -> SPPath {
+        SPPath::GlobalPath(vec!())
+    }
     pub fn add(&mut self, name: String) {
         match self {
             SPPath::LocalPath(ref mut xs) => xs.push(name),
             SPPath::GlobalPath(ref mut xs) => xs.push(name),
-            SPPath::NoPath => println!("Tried to push {} to an NoPath", name)
+            SPPath::NoPath => println!("Tried to push {} to an NoPath. Probably ok", name)
         }
     }
     pub fn from(xs: &[String]) -> SPPath {
@@ -607,21 +661,77 @@ mod tests_domain {
     use super::*;
     #[test]
     fn making() {
-        let mut m = SPItem::Model(Model{
-                node: SPNode::new("m"),
-                items: vec!()
-            });
-
-        m.update_path(SPPath::new_local(), SPPath::from_array_to_global(&["a", "b"]));
+        let mut m = Model::new("model", vec!());
+        m.update_path(SPPath::NoPath, SPPath::new_global());
+        let mut r1 = Resource::new("r1");
         
-        let n = SPItem::Model(Model{
-            node: SPNode::new("n"),
-            items: vec!()
-        });
+        let a = Topic::new("act", MessageField::Var(Variable::new(
+            "data", 
+            VariableType::Measured, 
+            SPValueType::Int32,
+            0.to_spvalue(), 
+            vec!(0.to_spvalue(), 10.to_spvalue())
+        )));
+        let r = Topic::new("ref", MessageField::Var(Variable::new(
+            "data", 
+            VariableType::Command, 
+            SPValueType::Int32,
+            0.to_spvalue(), 
+            vec!(0.to_spvalue(), 10.to_spvalue())
+        )));
+        let active = Topic::new("active", MessageField::Var(Variable::new_boolean(
+            "data", 
+            VariableType::Measured
+        )));
+        let activate = Topic::new("activate", MessageField::Var(Variable::new_boolean(
+            "data", 
+            VariableType::Command, 
+        )));
 
-        if let SPItem::Model(ref mut my) = m {
-            my.add_item(n);
-        }
+        let (a, _) = r1.add_message(a);
+        let (r, _) = r1.add_message(r);
+        let (active, _) = r1.add_message(active);
+        let (activate, _) = r1.add_message(activate);
+
+        m.add_item(SPItem::Resource(r1));
+        
+
+
+
+        // let to_upper = Transition::new(
+        //         format!("{}_to_upper", name),
+        //         p!(a == 0), // p!(r != upper), // added req on a == 0 just for testing
+        //         vec!(a!(r = upper)),
+        //         vec!(a!(a = upper)),
+        //     );
+        //     let to_lower = Transition::new(
+        //         format!("{}_to_lower", name),
+        //         p!(a == upper), // p!(r != 0), // added req on a == upper just for testing
+        //         vec!(a!(r = 0)),
+        //         vec!(a!(a = 0)),
+        //     );
+        //     let t_activate = Transition::new(
+        //         format!("{}_activate", name),
+        //         p!(!activated),
+        //         vec!(a!(activate)),
+        //         vec!(a!(activated)),
+        //     );
+        //     let t_deactivate = Transition::new(
+        //         format!("{}_activate", name),
+        //         p!(activated),
+        //         vec!(a!(!activate)),
+        //         vec!(a!(!activated)),
+        //     );
+
+        
+        // let n = SPItem::Model(Model{
+        //     node: SPNode::new("n"),
+        //     items: vec!()
+        // });
+
+        // if let SPItem::Model(ref mut my) = m {
+        //     my.add_item(n);
+        // }
         
         println!("{:?}", m);
     }
