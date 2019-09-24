@@ -237,70 +237,70 @@ macro_rules! p {
     // EQ
     ($name:ident == $value:expr) => {
         Predicate::EQ(
-            predicates::PredicateValue::SPPath($name.clone()),
-            predicates::PredicateValue::SPValue($value.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath($name.clone()),
+            $crate::predicates::PredicateValue::SPValue($value.to_spvalue()),
         )
     };
     ($name:block == $value:expr) => {{
         let xs: Vec<String> = $name.iter().map(|x| x.to_string()).collect();
         Predicate::EQ(
-            predicates::PredicateValue::SPPath(SPPath::from(&xs)),
-            predicates::PredicateValue::SPValue($value.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath(SPPath::from(&xs)),
+            $crate::predicates::PredicateValue::SPValue($value.to_spvalue()),
         )
     }};
     ($name:block == $value:block) => {{
         let xs: Vec<String> = $name.iter().map(|x| x.to_string()).collect();
         Predicate::EQ(
-            predicates::PredicateValue::SPPath(SPPath::from(&xs)),
-            predicates::PredicateValue::SPValue($value.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath(SPPath::from(&xs)),
+            $crate::predicates::PredicateValue::SPValue($value.to_spvalue()),
         )
     }};
     // NEQ
     ($name:ident != $value:expr) => {
         Predicate::NEQ(
-            predicates::PredicateValue::SPPath($name.clone()),
-            predicates::PredicateValue::SPValue($value.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath($name.clone()),
+            $crate::predicates::PredicateValue::SPValue($value.to_spvalue()),
         )
     };
     ($name:block != $value:expr) => {{
         let xs: Vec<String> = $name.iter().map(|x| x.to_string()).collect();
         Predicate::NEQ(
-            predicates::PredicateValue::SPPath(SPPath::from(&xs)),
-            predicates::PredicateValue::SPValue($value.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath(SPPath::from(&xs)),
+            $crate::predicates::PredicateValue::SPValue($value.to_spvalue()),
         )
     }};
     ($name:block != $value:block) => {{
         let xs: Vec<String> = $name.iter().map(|x| x.to_string()).collect();
         Predicate::NEQ(
-            predicates::PredicateValue::SPPath(SPPath::from(&xs)),
-            predicates::PredicateValue::SPValue($value.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath(SPPath::from(&xs)),
+            $crate::predicates::PredicateValue::SPValue($value.to_spvalue()),
         )
     }};
     // Boolean variable
     ($name:ident) => {
         Predicate::EQ(
-            predicates::PredicateValue::SPPath($name.clone()),
-            predicates::PredicateValue::SPValue(true.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath($name.clone()),
+            $crate::predicates::PredicateValue::SPValue(true.to_spvalue()),
         )
     };
     (!$name:ident) => {
         Predicate::EQ(
-            predicates::PredicateValue::SPPath($name.clone()),
-            predicates::PredicateValue::SPValue(false.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath($name.clone()),
+            $crate::predicates::PredicateValue::SPValue(false.to_spvalue()),
         )
     };
     ($name:block) => {
         let xs: Vec<String> = $name.iter().map(|x| x.to_string()).collect();
         Predicate::EQ(
-            predicates::PredicateValue::SPPath(SPPath::from(&xs)),
-            predicates::PredicateValue::SPValue(true.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath(SPPath::from(&xs)),
+            $crate::predicates::PredicateValue::SPValue(true.to_spvalue()),
         )
     };
     (!$name:block) => {
         let xs: Vec<String> = $name.iter().map(|x| x.to_string()).collect();
         Predicate::EQ(
-            predicates::PredicateValue::SPPath(SPPath::from(&xs)),
-            predicates::PredicateValue::SPValue(false.to_spvalue()),
+            $crate::predicates::PredicateValue::SPPath(SPPath::from(&xs)),
+            $crate::predicates::PredicateValue::SPValue(false.to_spvalue()),
         )
     };
 }
@@ -359,7 +359,7 @@ macro_rules! a {
     ($var:ident) => {
         Action {
             var: $var.clone(),
-            value: predicates::Compute::PredicateValue(predicates::PredicateValue::SPValue(
+            value: $crate::predicates::Compute::PredicateValue($crate::predicates::PredicateValue::SPValue(
                 true.to_spvalue(),
             )),
         }
@@ -367,7 +367,7 @@ macro_rules! a {
     (!$var:ident) => {
         Action {
             var: $var.clone(),
-            value: predicates::Compute::PredicateValue(predicates::PredicateValue::SPValue(
+            value: $crate::predicates::Compute::PredicateValue($crate::predicates::PredicateValue::SPValue(
                 false.to_spvalue(),
             )),
         }
@@ -375,7 +375,7 @@ macro_rules! a {
     ($var:ident = $val:expr) => {
         Action {
             var: $var.clone(),
-            value: predicates::Compute::PredicateValue(predicates::PredicateValue::SPValue(
+            value: $crate::predicates::Compute::PredicateValue($crate::predicates::PredicateValue::SPValue(
                 $val.to_spvalue(),
             )),
         }
@@ -383,7 +383,7 @@ macro_rules! a {
     ($var:ident <- $val:expr) => {
         Action {
             var: $var.clone(),
-            value: predicates::Compute::PredicateValue(predicates::PredicateValue::SPPath(
+            value: $crate::predicates::Compute::PredicateValue($crate::predicates::PredicateValue::SPPath(
                 $val.clone(),
             )),
         }
@@ -391,7 +391,7 @@ macro_rules! a {
     ($var:ident ? $val:expr) => {
         Action {
             var: $var.clone(),
-            value: predicates::Compute::Predicate($val.clone()),
+            value: $crate::predicates::Compute::Predicate($val.clone()),
         }
     };
 }

@@ -2,13 +2,13 @@
 
 #![allow(unused_mut)] // for some reason I get not a correct warning for mut in macros
 
-mod values;
+pub mod values;
 pub use values::*;
 
-mod predicates;
+pub mod predicates;
 pub use predicates::*;
 
-mod states;
+pub mod states;
 pub use states::*;
 
 use serde::{Deserialize, Serialize};
@@ -992,15 +992,63 @@ mod tests_domain {
             VariableType::Command, 
         )));
 
-        let a = r1.add_message(a);
-        let r = r1.add_message(r);
-        let active = r1.add_message(active);
-        let activate = r1.add_message(activate);
+        let mut a = r1.add_message(a).local_path();
+        a.add("data".to_string());
+        let mut r = r1.add_message(r).local_path();
+        r.add("data".to_string());
+        let mut active = r1.add_message(active).local_path();
+        active.add("data".to_string());
+        let mut activate = r1.add_message(activate).local_path();
+        activate.add("data".to_string());
 
-        let r1 = m.add_item(SPItem::Resource(r1));
+        
 
-        if let Some(SPItemRef::Resource(r)) = m.find(&r1.local_path()) {
-            let a_again = r.find(&a.local_path());
+        let name = "r1";
+        let upper = 10;
+        let to_upper = Transition::new(
+                &format!("{}_to_upper", name),
+                p!(a == 0), // p!(r != upper), // added req on a == 0 just for testing
+                vec!(a!(r = upper)),
+                vec!(a!(a = upper)),
+            );
+            let to_lower = Transition::new(
+                &format!("{}_to_lower", name),
+                p!(a == upper), // p!(r != 0), // added req on a == upper just for testing
+                vec!(a!(r = 0)),
+                vec!(a!(a = 0)),
+            );
+            let t_activate = Transition::new(
+                &format!("{}_activate", name),
+                p!(!active),
+                vec!(a!(activate)),
+                vec!(a!(active)),
+            );
+            let t_deactivate = Transition::new(
+                &format!("{}_deactivate", name),
+                p!(active),
+                vec!(a!(!activate)),
+                vec!(a!(!active)),
+            );
+
+            let ability = Ability::new(
+                "all", 
+                vec!(t_activate, t_deactivate), 
+                vec!(to_upper, to_lower), 
+                vec!()
+            );
+            
+            let ability = r1.add_ability(ability);
+
+            let r1 = m.add_item(SPItem::Resource(r1));
+    
+
+        let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.global_path()) {Some(r)} else {None};
+        println!("");
+        println!("resource: {:?}", resource);
+        println!("");
+
+        if let Some(SPItemRef::Resource(r)) = m.find(&r1.global_path()) {
+            let a_again = r.find(&a);
             println!("the resource {:?}", r);
             println!("the a {:?}", a_again);
         }
@@ -1009,30 +1057,7 @@ mod tests_domain {
 
 
 
-        // let to_upper = Transition::new(
-        //         format!("{}_to_upper", name),
-        //         p!(a == 0), // p!(r != upper), // added req on a == 0 just for testing
-        //         vec!(a!(r = upper)),
-        //         vec!(a!(a = upper)),
-        //     );
-        //     let to_lower = Transition::new(
-        //         format!("{}_to_lower", name),
-        //         p!(a == upper), // p!(r != 0), // added req on a == upper just for testing
-        //         vec!(a!(r = 0)),
-        //         vec!(a!(a = 0)),
-        //     );
-        //     let t_activate = Transition::new(
-        //         format!("{}_activate", name),
-        //         p!(!activated),
-        //         vec!(a!(activate)),
-        //         vec!(a!(activated)),
-        //     );
-        //     let t_deactivate = Transition::new(
-        //         format!("{}_activate", name),
-        //         p!(activated),
-        //         vec!(a!(!activate)),
-        //         vec!(a!(!activated)),
-        //     );
+        
 
         
         // let n = SPItem::Model(Model{
