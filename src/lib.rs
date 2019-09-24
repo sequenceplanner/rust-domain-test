@@ -17,78 +17,7 @@ use std::error;
 use std::fmt;
 
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
-pub enum SPItem {
-    Model(Model),
-    Resource(Resource),
-    Message(Message),
-    Topic(Topic),
-    Variable(Variable),
-    Operation(Operation),
-    Ability(Ability),
-    Transition(Transition),
-    //SOP(SOP),
-}
 
-impl SPItem {
-    pub fn name(&self) -> &str {
-        &self.node().name
-    }
-
-    /// Finds the item with a specific SPPath. If it
-    /// is a global path, only one can exists, if it is 
-    /// a local path, the first one is returned
-    // pub fn find(&self, path: SPPath) -> Option<&SPItem> {
-    //     match self {
-    //         SPItem::Model(x) => &x.find(path),
-    //         SPItem::Resource(x) => &x.find(path),
-    //         SPItem::Message(x) => &x.find(path),
-    //         SPItem::Topic(x) => &x.find(path),
-    //         SPItem::Variable(x) => &x.find(path),
-    //         SPItem::Operation(x) => &x.find(path),
-    //         SPItem::Ability(x) => &x.find(path),
-    //         SPItem::Transition(x) => &x.find(path),
-    //     }
-    // }
-
-    pub fn node(&self) -> &SPNode {
-        match self {
-            SPItem::Model(x) => &x.node,
-            SPItem::Resource(x) => &x.node,
-            SPItem::Message(x) => &x.node,
-            SPItem::Topic(x) => &x.node,
-            SPItem::Variable(x) => &x.node,
-            SPItem::Operation(x) => &x.node,
-            SPItem::Ability(x) => &x.node,
-            SPItem::Transition(x) => &x.node,
-        }
-    }
-    // fn node_mut(&mut self) -> &mut SPNode {
-    //     match self {
-    //         SPItem::Model(x) => &mut x.node,
-    //         SPItem::Resource(x) => &mut x.node,
-    //         SPItem::Message(x) => &mut x.node,
-    //         SPItem::Topic(x) => &mut x.node,
-    //         SPItem::Variable(x) => &mut x.node,
-    //         SPItem::Operation(x) => &mut x.node,
-    //         SPItem::Ability(x) => &mut x.node,
-    //         SPItem::Transition(x) => &mut x.node,
-    //     }
-    // }
-    pub fn update_path(&mut self, mut local: SPPath, mut global: SPPath) -> (SPPath, SPPath) {
-        match self {
-            SPItem::Model(x) => x.update_path(local, global),
-            SPItem::Resource(x) => x.update_path(local, global),
-            SPItem::Message(x) => x.update_path(local, global),
-            SPItem::Topic(x) => x.update_path(local, global),
-            SPItem::Variable(x) => x.update_path(local, global),
-            SPItem::Operation(x) => x.update_path(local, global),
-            SPItem::Ability(x) => x.update_path(local, global),
-            SPItem::Transition(x) => x.update_path(local, global),
-        }
-
-    }
-}
 
 #[derive(PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct SPNode {
@@ -104,6 +33,10 @@ impl SPNode {
             local_path: SPPath::NoPath,
             global_path: SPPath::NoPath,
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn local_path(&self) -> SPPath {
@@ -127,6 +60,18 @@ impl SPNode {
         (self.local_path(), self.global_path())
     }
 
+    pub fn find(&self, path: &SPPath) -> bool {
+        path != &SPPath::NoPath && (&self.local_path == path || &self.global_path == path)
+    }
+
+    pub fn next_node_in_path(&self, path: &SPPath) -> Option<String> {
+        match path {
+            SPPath::GlobalPath(_) => path.next_node_in_path(&self.global_path),
+            SPPath::LocalPath(_) => path.next_node_in_path(&self.local_path),
+            SPPath::NoPath => None,
+        }
+    }
+
     fn write_nice(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut res = String::new();
         res.push_str(&format!("{}- ", self.name));
@@ -141,6 +86,7 @@ impl SPNode {
 }
 
 
+
 impl std::fmt::Display for SPNode {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         self.write_nice(f)
@@ -153,10 +99,168 @@ impl std::fmt::Debug for SPNode {
     }
 }
 
+pub trait Noder {
+    fn node(&self) -> &SPNode;
+    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>>;
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a>;
+
+    fn name(&self) -> &str {&self.node().name}
+
+    /// Finds the item with a specific SPPath. If it
+    /// is a global path, only one can exists, if it is 
+    /// a local path, the first one is returned
+    fn find<'a>(&'a self, path: &SPPath) -> Option<SPItemRef<'a>>  {
+        if self.node().find(path) {
+            return Some(self.as_ref());
+        }
+        let next = self.node().next_node_in_path(path);
+        if next.is_none() {
+            return None
+        }
+        self.find_child(&next.unwrap(), path)
+    }
+    
+}
+
+
+fn find_in_list<'a, T>(xs: &'a [T], next: &str, path: &SPPath) -> Option<SPItemRef<'a>> where T: Noder {
+        for i in xs.iter() {
+            if i.node().name() == next {
+                if let Some(x) = i.find(path) {
+                    return Some(x)
+                }
+            }
+        }
+        return None
+    }
+
+
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub enum SPItem {
+    Model(Model),
+    Resource(Resource),
+    Message(Message),
+    Topic(Topic),
+    Variable(Variable),
+    Operation(Operation),
+    Ability(Ability),
+    Transition(Transition),
+    IfThen(IfThen),
+    //SOP(SOP),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum SPItemRef<'a> {
+    Model(&'a Model),
+    Resource(&'a Resource),
+    Message(&'a Message),
+    Topic(&'a Topic),
+    Variable(&'a Variable),
+    Operation(&'a Operation),
+    Ability(&'a Ability),
+    Transition(&'a Transition),
+    IfThen(&'a IfThen),
+    //SOP(SOP),
+}
+
+impl Noder for SPItem {
+    fn node(&self) -> &SPNode {
+        match self {
+            SPItem::Model(x) => x.node(),
+            SPItem::Resource(x) => x.node(),
+            SPItem::Message(x) => x.node(),
+            SPItem::Topic(x) => x.node(),
+            SPItem::Variable(x) => x.node(),
+            SPItem::Operation(x) => x.node(),
+            SPItem::Ability(x) => x.node(),
+            SPItem::Transition(x) => x.node(),
+            SPItem::IfThen(x) => x.node(),
+        }
+    }
+    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        match self {
+            SPItem::Model(x) => x.find_child(next, path),
+            SPItem::Resource(x) => x.find_child(next, path),
+            SPItem::Message(x) => x.find_child(next, path),
+            SPItem::Topic(x) => x.find_child(next, path),
+            SPItem::Variable(x) => x.find_child(next, path),
+            SPItem::Operation(x) => x.find_child(next, path),
+            SPItem::Ability(x) => x.find_child(next, path),
+            SPItem::Transition(x) => x.find_child(next, path),
+            SPItem::IfThen(x) => x.find_child(next, path),
+        }
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        match self {
+            SPItem::Model(x) => x.as_ref(),
+            SPItem::Resource(x) => x.as_ref(),
+            SPItem::Message(x) => x.as_ref(),
+            SPItem::Topic(x) => x.as_ref(),
+            SPItem::Variable(x) => x.as_ref(),
+            SPItem::Operation(x) => x.as_ref(),
+            SPItem::Ability(x) => x.as_ref(),
+            SPItem::Transition(x) => x.as_ref(),
+            SPItem::IfThen(x) => x.as_ref(),
+        }
+    }
+}
+
+
+impl SPItem {
+    pub fn update_path(&mut self, mut local: SPPath, mut global: SPPath) -> (SPPath, SPPath) {
+        match self {
+            SPItem::Model(x) => x.update_path(local, global),
+            SPItem::Resource(x) => x.update_path(local, global),
+            SPItem::Message(x) => x.update_path(local, global),
+            SPItem::Topic(x) => x.update_path(local, global),
+            SPItem::Variable(x) => x.update_path(local, global),
+            SPItem::Operation(x) => x.update_path(local, global),
+            SPItem::Ability(x) => x.update_path(local, global),
+            SPItem::Transition(x) => x.update_path(local, global),
+            SPItem::IfThen(x) => x.update_path(local, global),
+        }
+
+    }
+}
+
+impl<'a> SPItemRef<'a> {
+    pub fn node(&self) -> &SPNode {
+        match self {
+            SPItemRef::Model(x) => &x.node,
+            SPItemRef::Resource(x) => &x.node,
+            SPItemRef::Message(x) => &x.node,
+            SPItemRef::Topic(x) => &x.node,
+            SPItemRef::Variable(x) => &x.node,
+            SPItemRef::Operation(x) => &x.node,
+            SPItemRef::Ability(x) => &x.node,
+            SPItemRef::Transition(x) => &x.node,
+            SPItemRef::IfThen(x) => &x.node,
+        }
+    }
+    pub fn name(&self) -> &str {
+        &self.node().name
+    }
+}
+
+
+
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Model {
     node: SPNode,
     items: Vec<SPItem>
+}
+
+impl Noder for Model {
+    fn node(&self) -> &SPNode {
+        &self.node
+    }
+    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        find_in_list(self.items.as_slice(), next, path)
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        SPItemRef::Model(self)
+    }
 }
 
 impl Model {
@@ -196,8 +300,25 @@ pub struct Resource {
                               //pub comm: ResourceComm,
 }
 
+impl Noder for Resource {
+    fn node(&self) -> &SPNode {
+        &self.node
+    }
+    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        let res = find_in_list(self.abilities.as_slice(), next, path);
+        if res.is_some() {return res};
+        let res = find_in_list(self.parameters.as_slice(), next, path);
+        if res.is_some() {return res};
+        let res = find_in_list(self.messages.as_slice(), next, path);
+        
+        return res
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        SPItemRef::Resource(self)
+    }
+}
+
 impl Resource {
-    
     pub fn new(name: &str) -> Resource {
         let mut node = SPNode::new(name);
         node.update_path(SPPath::new_local(), SPPath::NoPath);
@@ -238,6 +359,7 @@ impl Resource {
         });
         (local, global)
     }
+
 }
 
 
@@ -245,6 +367,19 @@ impl Resource {
 pub struct Topic {
     node: SPNode,
     msg: MessageField,
+}
+
+impl Noder for Topic {
+    fn node(&self) -> &SPNode {
+        &self.node
+    }
+    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        if self.msg.name() != next {return None}
+        self.msg.find(path)
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        SPItemRef::Topic(self)
+    }
 }
 
 impl Topic {
@@ -266,11 +401,23 @@ impl Topic {
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Message {
     node: SPNode,
-    fields: Vec<(String, MessageField)>,
+    fields: Vec<MessageField>,  // note, the field name is in each node
+}
+
+impl Noder for Message {
+    fn node(&self) -> &SPNode {
+        &self.node
+    }
+    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        find_in_list(self.fields.as_slice(), next, path)
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        SPItemRef::Message(self)
+    }
 }
 
 impl Message {
-    pub fn new(name: &str, fields: Vec<(String, MessageField)>) -> Message {
+    pub fn new(name: &str, fields: Vec<MessageField>) -> Message {
         let node = SPNode::new(name);
         Message {
             node,
@@ -280,7 +427,7 @@ impl Message {
 
     pub fn update_path(&mut self, local: SPPath, global: SPPath) -> (SPPath, SPPath) {
         let (local, global) = self.node.update_path(local, global);
-        self.fields.iter_mut().for_each(|(_, value)| {
+        self.fields.iter_mut().for_each(|value| {
             value.update_path(local.clone(), global.clone());
         });
         (local, global)
@@ -291,6 +438,27 @@ impl Message {
 pub enum MessageField {
     Msg(Message),
     Var(Variable),
+}
+
+impl Noder for MessageField {
+    fn node(&self) -> &SPNode {
+        match self {
+            MessageField::Msg(ref x) => x.node(),
+            MessageField::Var(ref x) => x.node()
+        }
+    }
+    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        match self {
+            MessageField::Msg(ref x) => x.find_child(next, path),
+            MessageField::Var(ref x) => x.find_child(next, path),
+        }
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        match self {
+            MessageField::Msg(ref x) => x.as_ref(),
+            MessageField::Var(ref x) => x.as_ref(),
+        }
+    }
 }
 
 impl MessageField {
@@ -315,6 +483,18 @@ pub struct Variable {
     value_type: SPValueType,
     initial_value: SPValue,
     domain: Vec<SPValue>,
+}
+
+impl Noder for Variable {
+    fn node(&self) -> &SPNode {
+        &self.node
+    }
+    fn find_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
+        None
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        SPItemRef::Variable(self)
+    }
 }
 
 impl Variable {
@@ -376,6 +556,18 @@ pub struct Transition {
     effects: Vec<Action>,
 }
 
+impl Noder for Transition {
+    fn node(&self) -> &SPNode {
+        &self.node
+    }
+    fn find_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
+        None
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        SPItemRef::Transition(self)
+    }
+}
+
 impl Transition {
     pub fn new(name: &str, 
                guard: Predicate,
@@ -403,6 +595,23 @@ pub struct Ability {
     predicates: Vec<Variable>
 }
 
+impl Noder for Ability {
+    fn node(&self) -> &SPNode {
+        &self.node
+    }
+    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        let res = find_in_list(self.controlled.as_slice(), next, path);
+        if res.is_some() {return res};
+        let res = find_in_list(self.uncontrolled.as_slice(), next, path);
+        if res.is_some() {return res};
+        let res = find_in_list(self.predicates.as_slice(), next, path);
+        return res;
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        SPItemRef::Ability(self)
+    }
+}
+
 impl Ability {
     pub fn new(name: &str,
                 controlled: Vec<Transition>,
@@ -417,6 +626,8 @@ impl Ability {
             predicates
         }
     }
+    pub fn node(&self) -> &SPNode {&self.node}
+    pub fn name(&self) -> &str {&self.node().name}
 
     pub fn update_path(&mut self, local: SPPath, global: SPPath) -> (SPPath, SPPath) {
         let (local, global) = self.node.update_path(local, global);
@@ -444,6 +655,29 @@ pub struct Operation {
     predicates: Vec<Variable>,
     goal: Option<IfThen>,
     invariant: Option<IfThen>,
+}
+
+impl Noder for Operation {
+    fn node(&self) -> &SPNode {
+        &self.node
+    }
+    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        let res = find_in_list(self.precondition.as_slice(), next, path);
+        if res.is_some() {return res};
+        let res = find_in_list(self.postcondition.as_slice(), next, path);
+        if res.is_some() {return res};
+        let res = find_in_list(self.uncontrolled.as_slice(), next, path);
+        if res.is_some() {return res};
+        let res = find_in_list(self.predicates.as_slice(), next, path);
+        if res.is_some() {return res};
+        let res = self.goal.as_ref().and_then(|x| x.find(path));
+        if res.is_some() {return res};
+        let res = self.invariant.as_ref().and_then(|ref x| x.find(path));
+        return res;
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        SPItemRef::Operation(self)
+    }
 }
 
 impl Operation {
@@ -503,6 +737,18 @@ pub struct IfThen {
     then_: Predicate,
 }
 
+impl Noder for IfThen {
+    fn node(&self) -> &SPNode {
+        &self.node
+    }
+    fn find_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
+        None
+    }
+    fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
+        SPItemRef::IfThen(self)
+    }
+}
+
 impl IfThen {
     pub fn new( name: &str,
                 if_: Predicate,
@@ -520,6 +766,9 @@ impl IfThen {
         self.node.update_path(local, global)
     }
 }
+
+
+
 
 
 
@@ -611,12 +860,31 @@ impl SPPath {
         format!("{}", self)
     }
     pub fn is_child_of(&self, other: &SPPath) -> bool {
-        (self.path().len() >= other.path().len())
+        (self.path().len() > other.path().len())
             && other
                 .path()
                 .iter()
                 .zip(self.path().iter())
                 .all(|(a, b)| a == b)
+    }
+
+    /// returns the next name in the path of this SPPath based on a path
+    /// that is the current parent to this path
+    pub fn next_node_in_path(&self, parent_path: &SPPath) -> Option<String> {
+        if self.is_child_of(parent_path) && self.as_slize().len() > parent_path.as_slize().len() {
+            Some(self.as_slize()[parent_path.as_slize().len()].clone())
+        } else {
+            None
+        }
+    }
+
+    /// For internal use instead of cloning the path vec
+    fn as_slize(&self) -> &[String] {
+        match self {
+            SPPath::LocalPath(xs) => xs.as_slice(),
+            SPPath::GlobalPath(xs) => xs.as_slice(),
+            SPPath::NoPath => &[],
+        }
     }
 }
 
@@ -654,6 +922,8 @@ impl error::Error for SPError {
         None
     }
 }
+
+
 
 
 #[cfg(test)]
@@ -735,6 +1005,38 @@ mod tests_domain {
         
         println!("{:?}", m);
     }
+
+    #[test]
+    fn find() {
+        let mut m = Model::new("m", vec!(
+            SPItem::Model(Model::new("a", vec!(
+                SPItem::Model(Model::new("b", vec!())),
+                SPItem::Model(Model::new("c", vec!(
+                    SPItem::Model(Model::new("d", vec!()))
+                )))
+            ))),
+            SPItem::Model(Model::new("k", vec!(
+                SPItem::Model(Model::new("l", vec!()))
+            )))
+        ));
+
+        m.update_path(SPPath::NoPath, SPPath::new_global());
+
+        let g_ab = SPPath::from_array_to_global(&["m", "a", "b"]);
+        let g_acd = SPPath::from_array_to_global(&["m", "a", "c", "d"]);
+        let g_k = SPPath::from_array_to_global(&["m", "k"]);
+        let ab = m.find(&g_ab);
+        let acd = m.find(&g_acd);
+        let k = m.find(&g_k);
+
+        println!("{:?}", &ab);
+        println!("{:?}", &acd);
+        println!("{:?}", &k);
+
+        assert!(ab.unwrap().name() == "b");
+        assert!(acd.unwrap().name() == "d");
+        assert!(k.unwrap().name() == "k");
+    }
 }
 
 
@@ -765,5 +1067,28 @@ mod tests_paths {
             SPPath::from_string("G:a/b//k/"),
             Ok(SPPath::from_array_to_global(&["a", "b", "k"]))
         );
+    }
+
+    #[test]
+    fn get_next_name() {
+        let g_ab = SPPath::from_array_to_global(&["a", "b", "c"]);
+        let l_ab = SPPath::from_array(&["a", "b", "c"]);
+
+        let l_a = SPPath::from_array(&["a"]);
+        let l_b = SPPath::from_array(&["a", "b"]);
+        let g_a = SPPath::from_array_to_global(&["a"]);
+        let g_b = SPPath::from_array_to_global(&["a", "b"]);
+        let l_k = SPPath::from_array(&["k"]);
+
+        assert_eq!(g_ab.next_node_in_path(&l_a), Some("b".to_string()));
+        assert_eq!(g_ab.next_node_in_path(&l_b), Some("c".to_string()));
+        assert_eq!(g_ab.next_node_in_path(&g_a), Some("b".to_string()));
+        assert_eq!(g_ab.next_node_in_path(&g_b), Some("c".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&l_a), Some("b".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&l_b), Some("c".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&g_a), Some("b".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&g_b), Some("c".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&l_k), None);
+
     }
 }
