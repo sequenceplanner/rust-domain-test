@@ -24,16 +24,14 @@ use std::fmt;
 #[derive(PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct SPNode {
     name: String,
-    local_path: SPPath,
-    global_path: SPPath,
+    paths: SPPaths,
 }
 
 impl SPNode {
     pub fn new(name: &str) -> SPNode {
         SPNode {
             name: name.to_string(),
-            local_path: SPPath::NoPath,
-            global_path: SPPath::NoPath,
+            paths: SPPaths::empty(),
         }
     }
 
@@ -41,49 +39,32 @@ impl SPNode {
         &self.name
     }
 
-    pub fn local_path(&self) -> SPPath {
-        self.local_path.clone()
+    pub fn local_path(&self) -> &Option<LocalPath> {
+        &self.paths.local_path()
     }
-    pub fn global_path(&self) -> SPPath {
-        self.global_path.clone()
+    pub fn global_path(&self) -> &Option<GlobalPath> {
+        &self.paths.global_path()
     }
-
-    pub fn update_path(&mut self, mut local: SPPath, mut global: SPPath) -> SPPaths {
-        local.add(self.name.clone());
-        global.add(self.name.clone());
-        if let SPPath::GlobalPath(_) = local {
-            panic!("Must assign local, not {}", local);
-        }
-        if let SPPath::LocalPath(_) = global {
-            panic!("Must assign global, not {}", global);
-        }
-        self.local_path = local;
-        self.global_path = global;
-        SPPaths::new(self.local_path(), self.global_path())
+    pub fn paths(&self) -> &SPPaths {
+        &self.paths
     }
 
-    pub fn find(&self, path: &SPPath) -> bool {
-        path != &SPPath::NoPath && (&self.local_path == path || &self.global_path == path)
+    pub fn update_path(&mut self, paths: &SPPaths) -> SPPaths {
+        self.paths.upd(paths);
+        self.paths.add(self.name.clone());
+        self.paths().clone()
+    }
+
+    pub fn is_eq(&self, path: &SPPath) -> bool {
+        self.paths().is_eq(path)
     }
 
     pub fn next_node_in_path(&self, path: &SPPath) -> Option<String> {
-        match path {
-            SPPath::GlobalPath(_) => path.next_node_in_path(&self.global_path),
-            SPPath::LocalPath(_) => path.next_node_in_path(&self.local_path),
-            SPPath::NoPath => None,
-        }
+        self.paths().next_node_in_path(path)
     }
 
     fn write_nice(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut res = String::new();
-        res.push_str(&format!("{}- ", self.name));
-        if let SPPath::LocalPath(_) = self.local_path {
-            res.push_str(&format!("{}, ", self.local_path));
-        }
-        if let SPPath::GlobalPath(_) = self.global_path {
-            res.push_str(&format!("{}, ", self.global_path));
-        }
-        write!(f, "{}", res)
+        write!(f, "{}{}", self.name, self.paths())
     }
 }
 
@@ -105,16 +86,15 @@ pub trait Noder {
     fn node(&self) -> &SPNode;
     fn node_mut(&mut self) -> &mut SPNode;
     fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>>;
-    fn update_path_children(&mut self, local: SPPath, global: SPPath);
+    fn update_path_children(&mut self, paths: &SPPaths);
     fn as_ref<'a>(&'a self) -> SPItemRef<'a>;
 
     fn name(&self) -> &str {&self.node().name}
 
-    /// Finds the item with a specific SPPath. If it
-    /// is a global path, only one can exists, if it is 
-    /// a local path, the first one is returned
+    /// Finds the item with a specific SPPath. Will only find locals if asked from the
+    /// correct resource (or below)
     fn find<'a>(&'a self, path: &SPPath) -> Option<SPItemRef<'a>>  {
-        if self.node().find(path) {
+        if self.node().is_eq(path) {
             return Some(self.as_ref());
         }
         let next = self.node().next_node_in_path(path);
@@ -125,9 +105,9 @@ pub trait Noder {
     }
 
     /// updates the path of this item and its children
-    fn update_path(&mut self, mut local: SPPath, mut global: SPPath) -> SPPaths {
-        let paths = self.node_mut().update_path(local, global);
-        self.update_path_children(paths.local_path(), paths.global_path());
+    fn update_path(&mut self, paths: &SPPaths) -> SPPaths {
+        let paths = self.node_mut().update_path(paths);
+        self.update_path_children(&paths);
         paths
     }
     
@@ -156,10 +136,9 @@ fn find_in_list<'a, T>(
 /// Updates the path in items in the list of items impl Noder
 fn update_path_in_list<'a, T>(
     xs: &'a mut [T], 
-    local: &SPPath, 
-    global: &SPPath) where T: Noder {
+    paths: &SPPaths) where T: Noder {
     for i in xs.iter_mut() {
-        i.update_path(local.clone(), global.clone());
+        i.update_path(paths);
     }
 }
 
@@ -233,17 +212,17 @@ impl Noder for SPItem {
             SPItem::IfThen(x) => x.find_child(next, path),
         }
     }
-    fn update_path_children(&mut self, mut local: SPPath, mut global: SPPath) {
+    fn update_path_children(&mut self, paths: &SPPaths) {
         match self {
-            SPItem::Model(x) => x.update_path_children(local, global),
-            SPItem::Resource(x) => x.update_path_children(local, global),
-            SPItem::Message(x) => x.update_path_children(local, global),
-            SPItem::Topic(x) => x.update_path_children(local, global),
-            SPItem::Variable(x) => x.update_path_children(local, global),
-            SPItem::Operation(x) => x.update_path_children(local, global),
-            SPItem::Ability(x) => x.update_path_children(local, global),
-            SPItem::Transition(x) => x.update_path_children(local, global),
-            SPItem::IfThen(x) => x.update_path_children(local, global),
+            SPItem::Model(x) => x.update_path_children(paths),
+            SPItem::Resource(x) => x.update_path_children(paths),
+            SPItem::Message(x) => x.update_path_children(paths),
+            SPItem::Topic(x) => x.update_path_children(paths),
+            SPItem::Variable(x) => x.update_path_children(paths),
+            SPItem::Operation(x) => x.update_path_children(paths),
+            SPItem::Ability(x) => x.update_path_children(paths),
+            SPItem::Transition(x) => x.update_path_children(paths),
+            SPItem::IfThen(x) => x.update_path_children(paths),
         }
     }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
@@ -297,8 +276,8 @@ impl Noder for Model {
     fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
         find_in_list(self.items.as_slice(), next, path)
     }
-    fn update_path_children(&mut self, local: SPPath, global: SPPath) {
-        update_path_in_list(self.items.as_mut_slice(), &local, &global);
+    fn update_path_children(&mut self, paths: &SPPaths) {
+        update_path_in_list(self.items.as_mut_slice(), paths);
     }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
         SPItemRef::Model(self)
@@ -313,13 +292,18 @@ impl Model {
             items
         }
     }
+    pub fn new_root(name: &str, items: Vec<SPItem>) -> Model {
+        let mut m = Model::new(name, items);
+        m.update_path(&SPPaths::new(None, Some(GlobalPath::new())));
+        m
+    }
 
     pub fn items(&self) -> &[SPItem] {
         self.items.as_slice()
     }
 
     pub fn add_item(&mut self, mut item: SPItem) -> SPPaths {
-        let paths = item.update_path(self.node.local_path(), self.node.global_path());
+        let paths = item.update_path(self.node.paths());
         self.items.push(item);
         paths
     }
@@ -348,13 +332,13 @@ impl Noder for Resource {
         
         return res
     }
-    fn update_path_children(&mut self, _local: SPPath, global: SPPath) {
-        let mut local = SPPath::new_local();
-        local.add(self.name().to_string());
-        update_path_in_list(self.abilities.as_mut_slice(), &local, &global);
-        update_path_in_list(self.parameters.as_mut_slice(), &local, &global);
-        update_path_in_list(self.messages.as_mut_slice(), &local, &global);
-        self.node.local_path = local;
+    fn update_path_children(&mut self, _paths: &SPPaths) { 
+        let mut local = LocalPath::from(vec!(self.node.name.clone()));
+        self.node.paths.upd_local(Some(local));
+        let paths = self.node.paths();
+        update_path_in_list(self.abilities.as_mut_slice(), &paths);
+        update_path_in_list(self.parameters.as_mut_slice(), &paths);
+        update_path_in_list(self.messages.as_mut_slice(), &paths);
     }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
         SPItemRef::Resource(self)
@@ -364,7 +348,8 @@ impl Noder for Resource {
 impl Resource {
     pub fn new(name: &str) -> Resource {
         let mut node = SPNode::new(name);
-        node.update_path(SPPath::new_local(), SPPath::NoPath);
+        let mut local = LocalPath::from(vec!(name.to_string()));
+        node.update_path(&SPPaths::new(Some(local), None));
         Resource {
             node,
             ..Resource::default()
@@ -373,21 +358,21 @@ impl Resource {
 
     pub fn abilities(&self) -> &[Ability] {self.abilities.as_slice()}
     pub fn add_ability(&mut self, mut ability: Ability) -> SPPaths {
-        let paths = ability.update_path(self.node.local_path(), self.node.global_path());
+        let paths = ability.update_path(self.node.paths());
         self.abilities.push(ability);
         paths
     }
 
     pub fn parameters(&self) -> &[Variable] {self.parameters.as_slice()}
     pub fn add_parameter(&mut self, mut parameter: Variable) -> SPPaths {
-        let paths = parameter.update_path(self.node.local_path(), self.node.global_path());
+        let paths = parameter.update_path(self.node.paths());
         self.parameters.push(parameter);
         paths
     }
 
     pub fn messages(&self) -> &[Topic] {self.messages.as_slice()}
     pub fn add_message(&mut self, mut message: Topic) -> SPPaths {
-        let paths = message.update_path(self.node.local_path(), self.node.global_path());
+        let paths = message.update_path(self.node.paths());
         self.messages.push(message);
         paths
     }
@@ -409,8 +394,8 @@ impl Noder for Topic {
         if self.msg.name() != next {return None}
         self.msg.find(path)
     }
-    fn update_path_children(&mut self, local: SPPath, global: SPPath) {
-        self.msg.update_path(local, global);
+    fn update_path_children(&mut self, paths: &SPPaths) { 
+        self.msg.update_path(paths);
     }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
         SPItemRef::Topic(self)
@@ -441,8 +426,8 @@ impl Noder for Message {
     fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
         find_in_list(self.fields.as_slice(), next, path)
     }
-    fn update_path_children(&mut self, local: SPPath, global: SPPath) {
-        update_path_in_list(self.fields.as_mut_slice(), &local, &global);
+    fn update_path_children(&mut self, paths: &SPPaths) { 
+        update_path_in_list(self.fields.as_mut_slice(), paths);
     }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
         SPItemRef::Message(self)
@@ -486,10 +471,10 @@ impl Noder for MessageField {
             MessageField::Var(ref x) => x.find_child(next, path),
         }
     }
-    fn update_path_children(&mut self, local: SPPath, global: SPPath) {
+    fn update_path_children(&mut self, paths: &SPPaths) { 
         match self {
-            MessageField::Msg(ref mut x) => x.update_path_children(local, global),
-            MessageField::Var(ref mut x) => x.update_path_children(local, global),
+            MessageField::Msg(ref mut x) => x.update_path_children(paths),
+            MessageField::Var(ref mut x) => x.update_path_children(paths),
         }
     }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
@@ -523,7 +508,7 @@ impl Noder for Variable {
     fn find_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
         None
     }
-    fn update_path_children(&mut self, _: SPPath, _: SPPath) {}
+    fn update_path_children(&mut self, _paths: &SPPaths) {}
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
         SPItemRef::Variable(self)
     }
@@ -591,7 +576,7 @@ impl Noder for Transition {
     fn find_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
         None
     }
-    fn update_path_children(&mut self, _: SPPath, _: SPPath) {}
+    fn update_path_children(&mut self, _paths: &SPPaths) { }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
         SPItemRef::Transition(self)
     }
@@ -633,10 +618,10 @@ impl Noder for Ability {
         let res = find_in_list(self.predicates.as_slice(), next, path);
         return res;
     }
-    fn update_path_children(&mut self, local: SPPath, global: SPPath) {
-        update_path_in_list(self.controlled.as_mut_slice(), &local, &global);
-        update_path_in_list(self.uncontrolled.as_mut_slice(), &local, &global);
-        update_path_in_list(self.predicates.as_mut_slice(), &local, &global);
+    fn update_path_children(&mut self, paths: &SPPaths) { 
+        update_path_in_list(self.controlled.as_mut_slice(), paths);
+        update_path_in_list(self.uncontrolled.as_mut_slice(), paths);
+        update_path_in_list(self.predicates.as_mut_slice(), paths);
     }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
         SPItemRef::Ability(self)
@@ -689,13 +674,13 @@ impl Noder for Operation {
         let res = self.invariant.as_ref().and_then(|ref x| x.find(path));
         return res;
     }
-    fn update_path_children(&mut self, local: SPPath, global: SPPath) {
-        update_path_in_list(self.precondition.as_mut_slice(), &local, &global);
-        update_path_in_list(self.postcondition.as_mut_slice(), &local, &global);
-        update_path_in_list(self.uncontrolled.as_mut_slice(), &local, &global);
-        update_path_in_list(self.predicates.as_mut_slice(), &local, &global);
-        self.goal.as_mut().map(|mut x| x.update_path(local.clone(), global.clone()));
-        self.invariant.as_mut().map(|mut x| x.update_path(local.clone(), global.clone()));
+    fn update_path_children(&mut self, paths: &SPPaths) { 
+        update_path_in_list(self.precondition.as_mut_slice(), paths);
+        update_path_in_list(self.postcondition.as_mut_slice(), paths);
+        update_path_in_list(self.uncontrolled.as_mut_slice(), paths);
+        update_path_in_list(self.predicates.as_mut_slice(), paths);
+        self.goal.as_mut().map(|mut x| x.update_path(paths));
+        self.invariant.as_mut().map(|mut x| x.update_path(paths));
     }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
         SPItemRef::Operation(self)
@@ -742,7 +727,7 @@ impl Noder for IfThen {
     fn find_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
         None
     }
-    fn update_path_children(&mut self, _: SPPath, _: SPPath) {}
+    fn update_path_children(&mut self, _paths: &SPPaths) { }
     fn as_ref<'a>(&'a self) -> SPItemRef<'a> {
         SPItemRef::IfThen(self)
     }
@@ -769,62 +754,60 @@ impl IfThen {
 
 /// The SPPath is used for identifying all objects in a model. The path will be defined
 /// based on where the item is in the model hierarchy
-#[derive(Debug, Eq, Hash, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Eq, Hash, PartialEq, Serialize, Deserialize, Clone)]
 pub enum SPPath {
-    LocalPath(Vec<String>),
-    GlobalPath(Vec<String>),
-    NoPath,
+    LocalPath(LocalPath),
+    GlobalPath(GlobalPath),
 }
 
 impl Default for SPPath {
     fn default() -> Self {
-        SPPath::NoPath
+        SPPath::LocalPath(LocalPath{path: vec!()})
     }
 }
 
 impl std::fmt::Display for SPPath {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            SPPath::LocalPath(xs) => write!(f, "L:{}", xs.join("/")),
-            SPPath::GlobalPath(xs) => write!(f, "G:{}", xs.join("/")),
-            SPPath::NoPath => write!(f, "NOPATH"),
+            SPPath::LocalPath(x) => write!(f, "{}", x),
+            SPPath::GlobalPath(x) => write!(f, "{}", x),
+        }
+    }
+}
+impl std::fmt::Debug for SPPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            SPPath::LocalPath(x) => write!(f, "{}", x),
+            SPPath::GlobalPath(x) => write!(f, "{}", x),
         }
     }
 }
 
 impl SPPath {
-    pub fn new() -> SPPath {
-        SPPath::NoPath
-    }
     pub fn new_local() -> SPPath {
-        SPPath::LocalPath(vec!())
+        SPPath::LocalPath(LocalPath::new())
     }
     pub fn new_global() -> SPPath {
-        SPPath::GlobalPath(vec!())
+        SPPath::GlobalPath(GlobalPath::new())
     }
     pub fn add(&mut self, name: String) {
         match self {
-            SPPath::LocalPath(ref mut xs) => xs.push(name),
-            SPPath::GlobalPath(ref mut xs) => xs.push(name),
-            SPPath::NoPath => {},//println!("Tried to push {} to an NoPath. Probably ok", name)
+            SPPath::LocalPath(ref mut xs) => xs.add(name),
+            SPPath::GlobalPath(ref mut xs) => xs.add(name)
         }
     }
     pub fn from(xs: &[String]) -> SPPath {
         let v: Vec<String> = xs.iter().map(|s| s.to_string()).collect();
-        SPPath::LocalPath(v)
+        SPPath::LocalPath(LocalPath::from(v))
     }
     pub fn from_array(xs: &[&str]) -> SPPath {
         let v: Vec<String> = xs.iter().map(|s| s.to_string()).collect();
-        SPPath::LocalPath(v)
+        SPPath::LocalPath(LocalPath::from(v))
     }
     pub fn from_string(s: &str) -> Result<SPPath> {
-        if s == "NOPATH" {
-            return Ok(SPPath::NoPath);
-        }
         let what_type: Vec<&str> = s.split(":").collect();
 
         match what_type.as_slice() {
-            ["NOPATH"] => return Ok(SPPath::NoPath),
             ["L", tail] => {
                 let res: Vec<&str> = tail.split("/").collect();
                 return Ok(SPPath::from_array(&res));
@@ -838,17 +821,16 @@ impl SPPath {
     }
     pub fn from_to_global(n: &[String]) -> SPPath {
         let v: Vec<String> = n.iter().map(|s| s.to_string()).collect();
-        SPPath::GlobalPath(v)
+        SPPath::GlobalPath(GlobalPath::from(v))
     }
     pub fn from_array_to_global(n: &[&str]) -> SPPath {
         let v: Vec<String> = n.iter().map(|s| s.to_string()).collect();
-        SPPath::GlobalPath(v)
+        SPPath::GlobalPath(GlobalPath::from(v))
     }
     pub fn path(&self) -> Vec<String> {
         match self {
-            SPPath::LocalPath(xs) => xs.clone(),
-            SPPath::GlobalPath(xs) => xs.clone(),
-            SPPath::NoPath => vec![],
+            SPPath::LocalPath(x) => x.path(),
+            SPPath::GlobalPath(x) => x.path(),
         }
     }
     pub fn string_path(&self) -> String {
@@ -866,57 +848,197 @@ impl SPPath {
     /// returns the next name in the path of this SPPath based on a path
     /// that is the current parent to this path
     pub fn next_node_in_path(&self, parent_path: &SPPath) -> Option<String> {
-        if self.is_child_of(parent_path) && self.as_slize().len() > parent_path.as_slize().len() {
-            Some(self.as_slize()[parent_path.as_slize().len()].clone())
+        if self.is_child_of(parent_path) && self.as_slice().len() > parent_path.as_slice().len() {
+            Some(self.as_slice()[parent_path.as_slice().len()].clone())
         } else {
             None
         }
     }
 
+    pub fn as_sp(&self) -> SPPath {
+        self.clone()
+    }
+
     /// For internal use instead of cloning the path vec
-    fn as_slize(&self) -> &[String] {
+    pub fn as_slice(&self) -> &[String] {
         match self {
-            SPPath::LocalPath(xs) => xs.as_slice(),
-            SPPath::GlobalPath(xs) => xs.as_slice(),
-            SPPath::NoPath => &[],
+            SPPath::LocalPath(x) => x.as_slice(),
+            SPPath::GlobalPath(x) => x.as_slice(),
         }
+    }
+}
+
+// Maybe refactor into a trait with methods that are the same
+// pub trait Pather {
+//     fn path(&self) -> &[String];
+//     fn path_mut(&mut self) -> &mut [String];
+// }
+
+#[derive(Default, Eq, Hash, PartialEq, Serialize, Deserialize, Clone)]
+pub struct LocalPath {
+    path: Vec<String>,
+}
+impl LocalPath {
+    pub fn new() -> LocalPath {
+        LocalPath{path: vec!()}
+    }
+    pub fn path(&self) -> Vec<String> {
+        self.path.clone()
+    }
+    pub fn from(path: Vec<String>) -> LocalPath {
+        LocalPath{path}
+    }
+    pub fn add(&mut self, name: String) {
+        self.path.push(name);
+    }
+    pub fn as_slice(&self) -> &[String] {
+        self.path.as_slice()
+    }
+    pub fn as_sp(&self) -> SPPath {
+        SPPath::LocalPath(self.clone())
+    }
+    pub fn is_child_of(&self, other: &LocalPath) -> bool {
+        (self.as_slice().len() > other.as_slice().len())
+            && other
+                .as_slice()
+                .iter()
+                .zip(self.as_slice().iter())
+                .all(|(a, b)| a == b)
+    }
+}
+impl std::fmt::Display for LocalPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "L:{}", self.path.join("/"))
+    }
+}
+impl std::fmt::Debug for LocalPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "L:{}", self.path.join("/"))
+    }
+}
+
+#[derive(Default, Eq, Hash, PartialEq, Serialize, Deserialize, Clone)]
+pub struct GlobalPath{
+    path: Vec<String>,
+}
+impl GlobalPath {
+    pub fn new() -> GlobalPath {
+        GlobalPath{path: vec!()}
+    }
+    pub fn path(&self) -> Vec<String> {
+        self.path.clone()
+    }
+    pub fn from(path: Vec<String>) -> GlobalPath {
+        GlobalPath{path}
+    }
+    pub fn add(&mut self, name: String) {
+        self.path.push(name);
+    }
+    pub fn as_slice(&self) -> &[String] {
+        self.path.as_slice()
+    }
+    pub fn as_sp(&self) -> SPPath {
+        SPPath::GlobalPath(self.clone())
+    }
+    pub fn is_child_of(&self, other: &GlobalPath) -> bool {
+        (self.as_slice().len() > other.as_slice().len())
+            && other
+                .as_slice()
+                .iter()
+                .zip(self.as_slice().iter())
+                .all(|(a, b)| a == b)
+    }
+}
+impl std::fmt::Display for GlobalPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "G:{}", self.path.join("/"))
+    }
+}
+impl std::fmt::Debug for GlobalPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
 
 #[derive(Debug, Eq, Hash, PartialEq, Serialize, Deserialize, Clone, Default)]
 pub struct SPPaths {
-    local: SPPath,
-    global: SPPath,
+    local: Option<LocalPath>,
+    global: Option<GlobalPath>,
 }
 
 impl std::fmt::Display for SPPaths {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "<{},{}>", self.local, self.global)
+        let l: String = self.local.as_ref().map(|x| format!("{}", x)).unwrap_or("".to_string());
+        let g: String = self.global.as_ref().map(|x| format!("{}", x)).unwrap_or("".to_string());
+        write!(f, "<{},{}>", l, g)
     }
 }
 
 impl SPPaths {
-    pub fn new(local: SPPath, global: SPPath) -> SPPaths {
-        let local = match local {
-            SPPath::GlobalPath(_) => {
-                panic!("DO NOT ADD GLOBAL TO LOCAL, CHECK YOUR CODE: {}", local)
-            },
-            _ => local,
-        };
-        let global = match global {
-            SPPath::LocalPath(_) => {
-                panic!("DO NOT ADD LOCAL TO GLOBAL, CHECK YOUR CODE: {}", global)
-            },
-            _ => global,
-        };
+    pub fn new(local: Option<LocalPath>, global: Option<GlobalPath>) -> SPPaths {
         SPPaths {
             local,
             global
         }
     }
-    pub fn local_path(&self) -> SPPath {self.local.clone()}
-    pub fn global_path(&self) -> SPPath {self.global.clone()}
+    pub fn empty() -> SPPaths {
+        SPPaths::default()
+    }
+    pub fn local_path(&self) -> &Option<LocalPath> {
+        &self.local
+    }
+    pub fn global_path(&self) -> &Option<GlobalPath> {
+        &self.global
+    }
+
+    pub fn is_eq(&self, path: &SPPath) -> bool {
+        match path {
+            SPPath::LocalPath(p) => self.local.as_ref().map(|l| l == p).unwrap_or(false),
+            SPPath::GlobalPath(p) => self.global.as_ref().map(|g| g == p).unwrap_or(false),
+        }
+    }
+    pub fn is_parent_of(&self, path: &SPPath) -> bool {
+        match path {
+            SPPath::LocalPath(p) => self.local.as_ref().map(|x| p.is_child_of(&x)).unwrap_or(false),
+            SPPath::GlobalPath(p) => self.global.as_ref().map(|x| p.is_child_of(&x)).unwrap_or(false),
+        }
+    }
+
+    /// returns the next name in the path based on a local or gloabl path
+    /// in this SPPaths
+    pub fn next_node_in_path(&self, path: &SPPath) -> Option<String> {
+        let l_len: usize = self.local.as_ref().map(|x| x.as_slice().len()).unwrap_or(0);
+        let g_len: usize = self.global.as_ref().map(|x| x.as_slice().len()).unwrap_or(0);
+        if self.is_parent_of(path){
+            match path {
+                SPPath::LocalPath(x) =>  {
+                    Some(x.as_slice()[l_len].clone())
+                },
+                SPPath::GlobalPath(x) => {
+                    Some(x.as_slice()[g_len].clone())
+                }
+            }      
+        } else {
+            None
+        }
+    }
+
+
+    pub fn upd(&mut self, paths: &SPPaths) {
+        self.local = paths.local.clone();
+        self.global = paths.global.clone();
+    }
+    pub fn add(&mut self, name: String) {
+        self.local.as_mut().map(|x| x.path.push(name.clone()));
+        self.global.as_mut().map(|x| x.path.push(name));
+    }
+    pub fn upd_local(&mut self, path: Option<LocalPath>) {
+        self.local = path;
+    }
+    pub fn upd_global(&mut self, path: Option<GlobalPath>) {
+        self.global = path;
+    }
 }
 
 
@@ -965,8 +1087,7 @@ mod tests_domain {
     use super::*;
     #[test]
     fn making() {
-        let mut m = Model::new("model", vec!());
-        m.update_path(SPPath::NoPath, SPPath::new_global());
+        let mut m = Model::new_root("model", vec!());
         let mut r1 = Resource::new("r1");
         
         let a = Topic::new("act", MessageField::Var(Variable::new(
@@ -992,13 +1113,13 @@ mod tests_domain {
             VariableType::Command, 
         )));
 
-        let mut a = r1.add_message(a).local_path();
+        let mut a = r1.add_message(a).local_path().clone().unwrap();
         a.add("data".to_string());
-        let mut r = r1.add_message(r).local_path();
+        let mut r = r1.add_message(r).local_path().clone().unwrap();
         r.add("data".to_string());
-        let mut active = r1.add_message(active).local_path();
+        let mut active = r1.add_message(active).local_path().clone().unwrap();
         active.add("data".to_string());
-        let mut activate = r1.add_message(activate).local_path();
+        let mut activate = r1.add_message(activate).local_path().clone().unwrap();
         activate.add("data".to_string());
 
         
@@ -1006,49 +1127,49 @@ mod tests_domain {
         let name = "r1";
         let upper = 10;
         let to_upper = Transition::new(
-                &format!("{}_to_upper", name),
-                p!(a == 0), // p!(r != upper), // added req on a == 0 just for testing
-                vec!(a!(r = upper)),
-                vec!(a!(a = upper)),
-            );
-            let to_lower = Transition::new(
-                &format!("{}_to_lower", name),
-                p!(a == upper), // p!(r != 0), // added req on a == upper just for testing
-                vec!(a!(r = 0)),
-                vec!(a!(a = 0)),
-            );
-            let t_activate = Transition::new(
-                &format!("{}_activate", name),
-                p!(!active),
-                vec!(a!(activate)),
-                vec!(a!(active)),
-            );
-            let t_deactivate = Transition::new(
-                &format!("{}_deactivate", name),
-                p!(active),
-                vec!(a!(!activate)),
-                vec!(a!(!active)),
-            );
+            &format!("{}_to_upper", name),
+            p!(a == 0), // p!(r != upper), // added req on a == 0 just for testing
+            vec!(a!(r = upper)),
+            vec!(a!(a = upper)),
+        );
+        let to_lower = Transition::new(
+            &format!("{}_to_lower", name),
+            p!(a == upper), // p!(r != 0), // added req on a == upper just for testing
+            vec!(a!(r = 0)),
+            vec!(a!(a = 0)),
+        );
+        let t_activate = Transition::new(
+            &format!("{}_activate", name),
+            p!(!active),
+            vec!(a!(activate)),
+            vec!(a!(active)),
+        );
+        let t_deactivate = Transition::new(
+            &format!("{}_deactivate", name),
+            p!(active),
+            vec!(a!(!activate)),
+            vec!(a!(!active)),
+        );
 
-            let ability = Ability::new(
-                "all", 
-                vec!(t_activate, t_deactivate), 
-                vec!(to_upper, to_lower), 
-                vec!()
-            );
-            
-            let ability = r1.add_ability(ability);
+        let ability = Ability::new(
+            "all", 
+            vec!(t_activate, t_deactivate), 
+            vec!(to_upper, to_lower), 
+            vec!()
+        );
+        
+        let ability = r1.add_ability(ability);
 
-            let r1 = m.add_item(SPItem::Resource(r1));
+        let r1 = m.add_item(SPItem::Resource(r1)).global_path().clone().unwrap();
     
 
-        let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.global_path()) {Some(r)} else {None};
+        let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.as_sp()) {Some(r)} else {None};
         println!("");
         println!("resource: {:?}", resource);
         println!("");
 
-        if let Some(SPItemRef::Resource(r)) = m.find(&r1.global_path()) {
-            let a_again = r.find(&a);
+        if let Some(SPItemRef::Resource(r)) = m.find(&r1.as_sp()) {
+            let a_again = r.find(&a.as_sp());
             println!("the resource {:?}", r);
             println!("the a {:?}", a_again);
         }
@@ -1086,7 +1207,7 @@ mod tests_domain {
             )))
         ));
 
-        m.update_path(SPPath::NoPath, SPPath::new_global());
+        m.update_path(&SPPaths::new(None, Some(GlobalPath::new())));
 
         let g_ab = SPPath::from_array_to_global(&["m", "a", "b"]);
         let g_acd = SPPath::from_array_to_global(&["m", "a", "c", "d"]);
@@ -1118,11 +1239,8 @@ mod tests_paths {
 
         assert_eq!(g_ab.string_path(), "G:a/b".to_string());
         assert_eq!(l_ab.string_path(), "L:a/b".to_string());
-        assert_eq!(SPPath::NoPath.string_path(), "NOPATH".to_string());
         assert_eq!(SPPath::from_string("G:a/b"), Ok(g_ab.clone()));
         assert_eq!(SPPath::from_string("L:a/b"), Ok(l_ab.clone()));
-        assert_eq!(SPPath::from_string("NOPATH"), Ok(SPPath::NoPath));
-        assert_eq!(SPPath::from_string("NOPATH"), Ok(SPPath::NoPath));
 
         assert!(SPPath::from_string("G:").is_err());
         assert!(SPPath::from_string("G/no").is_err());

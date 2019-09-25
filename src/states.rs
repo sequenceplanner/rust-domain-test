@@ -334,9 +334,9 @@ mod sp_value_test {
 
         assert_eq!(s, s2);
 
-        let var_a = SPPath::GlobalPath(vec!["a".to_string(), "b".to_string()]);
-        let var_b = SPPath::GlobalPath(vec!["a".to_string(), "c".to_string()]);
-        let var_c = SPPath::GlobalPath(vec!["k".to_string(), "l".to_string()]);
+        let var_a = SPPath::GlobalPath(GlobalPath::from(vec!["a".to_string(), "b".to_string()]));
+        let var_b = SPPath::GlobalPath(GlobalPath::from(vec!["a".to_string(), "c".to_string()]));
+        let var_c = SPPath::GlobalPath(GlobalPath::from(vec!["k".to_string(), "l".to_string()]));
         let mut m = HashMap::new();
         m.insert(var_a, 2.to_state());
         m.insert(var_b, true.to_state());

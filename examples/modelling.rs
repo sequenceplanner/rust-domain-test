@@ -1,48 +1,47 @@
-#[macro_use]
-extern crate domain_test;
+
 use domain_test::*;
 
 fn main() {
-    let mut m = Model::new("model", vec!());
-    m.update_path(SPPath::NoPath, SPPath::new_global());
-    let mut r1 = Resource::new("r1");
-    
-    let a = Topic::new("act", MessageField::Var(Variable::new(
-        "data", 
-        VariableType::Measured, 
-        SPValueType::Int32,
-        0.to_spvalue(), 
-        vec!(0.to_spvalue(), 10.to_spvalue())
-    )));
-    let r = Topic::new("ref", MessageField::Var(Variable::new(
-        "data", 
-        VariableType::Command, 
-        SPValueType::Int32,
-        0.to_spvalue(), 
-        vec!(0.to_spvalue(), 10.to_spvalue())
-    )));
-    let active = Topic::new("active", MessageField::Var(Variable::new_boolean(
-        "data", 
-        VariableType::Measured
-    )));
-    let activate = Topic::new("activate", MessageField::Var(Variable::new_boolean(
-        "data", 
-        VariableType::Command, 
-    )));
+let mut m = Model::new_root("model", vec!());
+        let mut r1 = Resource::new("r1");
+        
+        let a = Topic::new("act", MessageField::Var(Variable::new(
+            "data", 
+            VariableType::Measured, 
+            SPValueType::Int32,
+            0.to_spvalue(), 
+            vec!(0.to_spvalue(), 10.to_spvalue())
+        )));
+        let r = Topic::new("ref", MessageField::Var(Variable::new(
+            "data", 
+            VariableType::Command, 
+            SPValueType::Int32,
+            0.to_spvalue(), 
+            vec!(0.to_spvalue(), 10.to_spvalue())
+        )));
+        let active = Topic::new("active", MessageField::Var(Variable::new_boolean(
+            "data", 
+            VariableType::Measured
+        )));
+        let activate = Topic::new("activate", MessageField::Var(Variable::new_boolean(
+            "data", 
+            VariableType::Command, 
+        )));
 
-    let mut a = r1.add_message(a).local_path();
-    a.add("data".to_string());  // add_message will only return the topic
-    let mut r = r1.add_message(r).local_path();
-    r.add("data".to_string());
-    let mut active = r1.add_message(active).local_path();
-    active.add("data".to_string());
-    let mut activate = r1.add_message(activate).local_path();
-    activate.add("data".to_string());
+        let mut a = r1.add_message(a).local_path().clone().unwrap();
+        a.add("data".to_string());
+        let mut r = r1.add_message(r).local_path().clone().unwrap();
+        r.add("data".to_string());
+        let mut active = r1.add_message(active).local_path().clone().unwrap();
+        active.add("data".to_string());
+        let mut activate = r1.add_message(activate).local_path().clone().unwrap();
+        activate.add("data".to_string());
 
+        
 
-    let name = "r1";
-    let upper = 10;
-    let to_upper = Transition::new(
+        let name = "r1";
+        let upper = 10;
+        let to_upper = Transition::new(
             &format!("{}_to_upper", name),
             p!(a == 0), // p!(r != upper), // added req on a == 0 just for testing
             vec!(a!(r = upper)),
@@ -76,17 +75,35 @@ fn main() {
         
         let ability = r1.add_ability(ability);
 
+        let r1 = m.add_item(SPItem::Resource(r1)).global_path().clone().unwrap();
+    
 
-    let r1 = m.add_item(SPItem::Resource(r1));
+        let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.as_sp()) {Some(r)} else {None};
+        println!("");
+        println!("resource: {:?}", resource);
+        println!("");
 
-    let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.global_path()) {Some(r)} else {None};
-    println!("{:?}", resource);
+        if let Some(SPItemRef::Resource(r)) = m.find(&r1.as_sp()) {
+            let a_again = r.find(&a.as_sp());
+            println!("the resource {:?}", r);
+            println!("the a {:?}", a_again);
+        }
 
-    if let Some(SPItemRef::Resource(r)) = m.find(&r1.global_path()) {
-        let a_again = r.find(&a);
-        println!("the resource {:?}", r);
-        println!("the a {:?}", a_again);
-    }
+        
 
-    println!("{:?}", m);
+
+
+        
+
+        
+        // let n = SPItem::Model(Model{
+        //     node: SPNode::new("n"),
+        //     items: vec!()
+        // });
+
+        // if let SPItem::Model(ref mut my) = m {
+        //     my.add_item(n);
+        // }
+        
+        println!("{:?}", m);
 }
