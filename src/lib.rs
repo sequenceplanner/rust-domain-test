@@ -20,13 +20,14 @@ pub use node::*;
 pub mod items;
 pub use items::*;
 
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
 
 
-type Result<T> = std::result::Result<T, SPError>;
+type SPResult<T> = std::result::Result<T, SPError>;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 pub enum SPError {
@@ -145,13 +146,13 @@ mod tests_domain {
         let r1 = m.add_item(SPItem::Resource(r1)).global_path().clone().unwrap();
     
 
-        let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.as_sp()) {Some(r)} else {None};
+        let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.to_sp()) {Some(r)} else {None};
         println!("");
         println!("resource: {:?}", resource);
         println!("");
 
-        if let Some(SPItemRef::Resource(r)) = m.find(&r1.as_sp()) {
-            let a_again = r.find(&a.as_sp());
+        if let Some(SPItemRef::Resource(r)) = m.find(&r1.to_sp()) {
+            let a_again = r.find(&a.to_sp());
             println!("the resource {:?}", r);
             println!("the a {:?}", a_again);
         }
@@ -211,50 +212,3 @@ mod tests_domain {
 
 
 
-#[cfg(test)]
-mod tests_paths {
-    use super::*;
-    #[test]
-    fn making() {
-        let g_ab = SPPath::from_array_to_global(&["a", "b"]);
-        let l_ab = SPPath::from_array(&["a", "b"]);
-
-        assert_eq!(g_ab.string_path(), "G:a/b".to_string());
-        assert_eq!(l_ab.string_path(), "L:a/b".to_string());
-        assert_eq!(SPPath::from_string("G:a/b"), Ok(g_ab.clone()));
-        assert_eq!(SPPath::from_string("L:a/b"), Ok(l_ab.clone()));
-
-        assert!(SPPath::from_string("G:").is_err());
-        assert!(SPPath::from_string("G/no").is_err());
-        assert!(SPPath::from_string("H:a/b/").is_err());
-        assert!(SPPath::from_string("a/b/").is_err());
-        assert!(SPPath::from_string("G:top_path").is_ok());
-        assert_eq!(
-            SPPath::from_string("G:a/b//k/"),
-            Ok(SPPath::from_array_to_global(&["a", "b", "k"]))
-        );
-    }
-
-    #[test]
-    fn get_next_name() {
-        let g_ab = SPPath::from_array_to_global(&["a", "b", "c"]);
-        let l_ab = SPPath::from_array(&["a", "b", "c"]);
-
-        let l_a = SPPath::from_array(&["a"]);
-        let l_b = SPPath::from_array(&["a", "b"]);
-        let g_a = SPPath::from_array_to_global(&["a"]);
-        let g_b = SPPath::from_array_to_global(&["a", "b"]);
-        let l_k = SPPath::from_array(&["k"]);
-
-        assert_eq!(g_ab.next_node_in_path(&l_a), Some("b".to_string()));
-        assert_eq!(g_ab.next_node_in_path(&l_b), Some("c".to_string()));
-        assert_eq!(g_ab.next_node_in_path(&g_a), Some("b".to_string()));
-        assert_eq!(g_ab.next_node_in_path(&g_b), Some("c".to_string()));
-        assert_eq!(l_ab.next_node_in_path(&l_a), Some("b".to_string()));
-        assert_eq!(l_ab.next_node_in_path(&l_b), Some("c".to_string()));
-        assert_eq!(l_ab.next_node_in_path(&g_a), Some("b".to_string()));
-        assert_eq!(l_ab.next_node_in_path(&g_b), Some("c".to_string()));
-        assert_eq!(l_ab.next_node_in_path(&l_k), None);
-
-    }
-}

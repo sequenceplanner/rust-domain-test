@@ -78,13 +78,13 @@ let mut m = Model::new_root("model", vec!());
         let r1 = m.add_item(SPItem::Resource(r1)).global_path().clone().unwrap();
     
 
-        let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.as_sp()) {Some(r)} else {None};
+        let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.to_sp()) {Some(r)} else {None};
         println!("");
         println!("resource: {:?}", resource);
         println!("");
 
-        if let Some(SPItemRef::Resource(r)) = m.find(&r1.as_sp()) {
-            let a_again = r.find(&a.as_sp());
+        if let Some(SPItemRef::Resource(r)) = m.find(&r1.to_sp()) {
+            let a_again = r.find(&a.to_sp());
             println!("the resource {:?}", r);
             println!("the a {:?}", a_again);
         }

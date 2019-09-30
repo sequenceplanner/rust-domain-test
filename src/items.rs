@@ -455,6 +455,23 @@ impl Transition {
     }
 }
 
+impl EvaluatePredicate for Transition {
+    fn eval(&self, state: &SPState) -> bool {
+        self.guard.eval(state) && self.actions.iter().all(|a| a.eval(state))
+    }
+}
+
+impl NextAction for Transition {
+    fn next(&self, state: &SPState) -> SPResult<AssignState> {
+        let mut s: HashMap<SPPath, AssignStateValue> = HashMap::new();
+        for a in self.actions.iter() {
+            let next = a.next(state)?;
+            s.extend(next.s);
+        }
+        Ok(AssignState{s})
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Ability {
     node: SPNode,
@@ -603,4 +620,108 @@ impl IfThen {
             then_
         }
     }
+}
+
+
+
+
+#[cfg(test)]
+mod test_items {
+    use super::*;
+
+  #[test]
+    fn testing_transitions() {
+        let ab = SPPath::from_array(&["a", "b"]);
+        let ac = SPPath::from_array(&["a", "c"]);
+        let kl = SPPath::from_array(&["k", "l"]);
+        let xy = SPPath::from_array(&["x", "y"]);
+
+        let mut s = state!(ab => 2, ac => true, kl => 3, xy => false);
+        let p = pr!{{p!(!ac)} && {p!(!xy)}};
+
+        let a = a!(ac = false);
+        let b = a!(ab <- kl);
+        let c = a!(xy ? p);
+
+        let t1 = Transition::new("t1", p!(ac),vec!(a), vec!());
+        let t2 = Transition::new("t2", p!(!ac),vec!(b), vec!());
+        let t3 = Transition::new("t3", Predicate::TRUE,vec!(c), vec!());
+
+        let res = t1.eval(&s);
+        println!("t1.eval: {:?}", res);
+        assert!(res);
+
+        let res = t1.next(&s).unwrap();
+        println!("t1.next: {:?}", res);
+
+        s.insert_map(res).unwrap();
+        println!("s after t1: {:?}", s);
+        assert_eq!(s.get_value(&ac).unwrap(), &false.to_spvalue());
+
+        let res = t2.eval(&s);
+        println!("t2: {:?}", res);
+        assert!(res);
+
+        let res = t2.next(&s).unwrap();
+        println!("t2.next: {:?}", res);
+
+        s.insert_map(res).unwrap();
+        println!("s after t2{:?}", s);
+        assert_eq!(s.get_value(&ab).unwrap(), &3.to_spvalue());
+
+        s.take_all_next();
+        let res = t3.eval(&s);
+        println!("t3: {:?}", res);
+        assert!(res);
+        s.insert_map(t3.next(&s).unwrap()).unwrap();
+        assert_eq!(s.get_value(&xy).unwrap(), &true.to_spvalue());
+
+    }
+
+    // #[test]
+    // fn transition_macros() {
+    //     let ab = SPPath::from_array(&["a", "b"]);
+    //     let ac = SPPath::from_array(&["a", "c"]);
+    //     let kl = SPPath::from_array(&["k", "l"]);
+    //     let xy = SPPath::from_array(&["x", "y"]);
+
+    //     let t = transition!(SPPath::from_array(&["t"]), Predicate::TRUE);
+    //     let res = Transition::new(
+    //         "res",
+    //         Predicate::TRUE,
+    //         vec!(),
+    //         vec!(),
+    //     );
+    //     assert_eq!(t, res);
+
+    //     let t = transition!(SPPath::from_array(&["t"]), p!(ab), a!(ab), a!(!kl));
+    //     let res = Transition {
+    //         path: t.path.clone(),
+    //         guard: p!(ab),
+    //         actions: vec!(a!(ab), a!(!kl)),
+    //         effects: vec!(),
+    //     };
+    //     assert_eq!(t, res);
+
+    //     let t = transition!(SPPath::from_array(&["t"]), p!(ab), a!(ab) ; a!(!kl));
+    //     let res = Transition {
+    //         path: t.path.clone(),
+    //         guard: p!(ab),
+    //         actions: vec!(a!(ab)),
+    //         effects: vec!(a!(!kl)),
+    //     };
+    //     assert_eq!(t, res);
+
+    //     let t = transition!(SPPath::from_array(&["t"]), p!(ab), a!(ab), a!(ab); a!(!kl), a!(!kl));
+    //     let res = Transition {
+    //         path: t.path.clone(),
+    //         guard: p!(ab),
+    //         actions: vec!(a!(ab), a!(ab)),
+    //         effects: vec!(a!(!kl), a!(!kl)),
+    //     };
+    //     assert_eq!(t, res);
+    // }
+
+
+
 }

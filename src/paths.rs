@@ -5,7 +5,7 @@ use super::*;
 
 /// The SPPath is used for identifying all objects in a model. The path will be defined
 /// based on where the item is in the model hierarchy
-#[derive(Eq, Hash, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Hash, Eq, PartialEq, PartialOrd, Ord, Clone)]
 pub enum SPPath {
     LocalPath(LocalPath),
     GlobalPath(GlobalPath),
@@ -34,6 +34,25 @@ impl std::fmt::Debug for SPPath {
     }
 }
 
+impl serde::ser::Serialize for SPPath {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        serializer.serialize_str(&format!("{}", self))
+
+    }
+}
+impl<'de> serde::de::Deserialize<'de> for SPPath {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        SPPath::from_string(&s).map_err(serde::de::Error::custom)
+    }
+}
+
 impl SPPath {
     pub fn new_local() -> SPPath {
         SPPath::LocalPath(LocalPath::new())
@@ -47,6 +66,12 @@ impl SPPath {
             SPPath::GlobalPath(ref mut xs) => xs.add(name)
         }
     }
+    pub fn add_root(&mut self, name: String) {
+        match self {
+            SPPath::LocalPath(ref mut xs) => xs.add_root(name),
+            SPPath::GlobalPath(ref mut xs) => xs.add_root(name)
+        }
+    }
     pub fn from(xs: &[String]) -> SPPath {
         let v: Vec<String> = xs.iter().map(|s| s.to_string()).collect();
         SPPath::LocalPath(LocalPath::from(v))
@@ -55,7 +80,7 @@ impl SPPath {
         let v: Vec<String> = xs.iter().map(|s| s.to_string()).collect();
         SPPath::LocalPath(LocalPath::from(v))
     }
-    pub fn from_string(s: &str) -> Result<SPPath> {
+    pub fn from_string(s: &str) -> SPResult<SPPath> {
         let what_type: Vec<&str> = s.split(":").collect();
 
         match what_type.as_slice() {
@@ -106,7 +131,7 @@ impl SPPath {
         }
     }
 
-    pub fn as_sp(&self) -> SPPath {
+    pub fn to_sp(&self) -> SPPath {
         self.clone()
     }
 
@@ -125,7 +150,7 @@ impl SPPath {
 //     fn path_mut(&mut self) -> &mut [String];
 // }
 
-#[derive(Default, Eq, Hash, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Hash, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize, Clone, Default)]
 pub struct LocalPath {
     path: Vec<String>,
 }
@@ -142,10 +167,13 @@ impl LocalPath {
     pub fn add(&mut self, name: String) {
         self.path.push(name);
     }
+    pub fn add_root(&mut self, name: String) {
+        self.path.insert(0,name);
+    }
     pub fn as_slice(&self) -> &[String] {
         self.path.as_slice()
     }
-    pub fn as_sp(&self) -> SPPath {
+    pub fn to_sp(&self) -> SPPath {
         SPPath::LocalPath(self.clone())
     }
     pub fn is_child_of(&self, other: &LocalPath) -> bool {
@@ -168,7 +196,7 @@ impl std::fmt::Debug for LocalPath {
     }
 }
 
-#[derive(Default, Eq, Hash, PartialEq, Serialize, Deserialize, Clone)]
+#[derive(Hash, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize, Clone, Default)]
 pub struct GlobalPath{
     path: Vec<String>,
 }
@@ -185,10 +213,13 @@ impl GlobalPath {
     pub fn add(&mut self, name: String) {
         self.path.push(name);
     }
+    pub fn add_root(&mut self, name: String) {
+        self.path.insert(0,name);
+    }
     pub fn as_slice(&self) -> &[String] {
         self.path.as_slice()
     }
-    pub fn as_sp(&self) -> SPPath {
+    pub fn to_sp(&self) -> SPPath {
         SPPath::GlobalPath(self.clone())
     }
     pub fn is_child_of(&self, other: &GlobalPath) -> bool {
@@ -212,7 +243,7 @@ impl std::fmt::Debug for GlobalPath {
 }
 
 
-#[derive(Debug, Eq, Hash, PartialEq, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Hash, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize, Clone, Default)]
 pub struct SPPaths {
     local: Option<LocalPath>,
     global: Option<GlobalPath>,
@@ -289,5 +320,67 @@ impl SPPaths {
     }
     pub fn upd_global(&mut self, path: Option<GlobalPath>) {
         self.global = path;
+    }
+}
+
+
+
+#[cfg(test)]
+mod tests_paths {
+    use super::*;
+    #[test]
+    fn making() {
+        let g_ab = SPPath::from_array_to_global(&["a", "b"]);
+        let l_ab = SPPath::from_array(&["a", "b"]);
+
+        assert_eq!(g_ab.string_path(), "G:a/b".to_string());
+        assert_eq!(l_ab.string_path(), "L:a/b".to_string());
+        assert_eq!(SPPath::from_string("G:a/b"), Ok(g_ab.clone()));
+        assert_eq!(SPPath::from_string("L:a/b"), Ok(l_ab.clone()));
+
+        assert!(SPPath::from_string("G:").is_err());
+        assert!(SPPath::from_string("G/no").is_err());
+        assert!(SPPath::from_string("H:a/b/").is_err());
+        assert!(SPPath::from_string("a/b/").is_err());
+        assert!(SPPath::from_string("G:top_path").is_ok());
+        assert_eq!(
+            SPPath::from_string("G:a/b//k/"),
+            Ok(SPPath::from_array_to_global(&["a", "b", "k"]))
+        );
+    }
+
+    #[test]
+    fn get_next_name() {
+        let g_ab = SPPath::from_array_to_global(&["a", "b", "c"]);
+        let l_ab = SPPath::from_array(&["a", "b", "c"]);
+
+        let l_a = SPPath::from_array(&["a"]);
+        let l_b = SPPath::from_array(&["a", "b"]);
+        let g_a = SPPath::from_array_to_global(&["a"]);
+        let g_b = SPPath::from_array_to_global(&["a", "b"]);
+        let l_k = SPPath::from_array(&["k"]);
+
+        assert_eq!(g_ab.next_node_in_path(&l_a), Some("b".to_string()));
+        assert_eq!(g_ab.next_node_in_path(&l_b), Some("c".to_string()));
+        assert_eq!(g_ab.next_node_in_path(&g_a), Some("b".to_string()));
+        assert_eq!(g_ab.next_node_in_path(&g_b), Some("c".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&l_a), Some("b".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&l_b), Some("c".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&g_a), Some("b".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&g_b), Some("c".to_string()));
+        assert_eq!(l_ab.next_node_in_path(&l_k), None);
+
+    }
+
+    #[test]
+    fn jsonify() {
+        let p = SPPath::from_array(&["a", "b"]);
+
+        let json = serde_json::to_string(&p);
+        println!("{:?}", json);
+
+        let mut m = HashMap::new();
+        m.insert(p, 1);
+        println!("{:?}", m);
     }
 }
