@@ -72,6 +72,20 @@ mod tests_domain {
     fn making() {
         let mut m = Model::new_root("model", vec!());
         let mut r1 = Resource::new("r1");
+
+        let test = MessageField::Var(Variable::new_boolean("kalle", VariableType::Measured));
+        //let n = test.as_ref();
+
+        let t = Topic::new("t", test);
+        println!("testing n {:?}", t);
+        //r1.add_message(t);
+
+        let msg_to_robot = Topic::new("cmd", MessageField::Msg(
+            Message::new(name: &str, fields: Vec<MessageField>)
+        ))
+
+
+
         
         let a = Topic::new("act", MessageField::Var(Variable::new(
             "data", 
@@ -141,18 +155,18 @@ mod tests_domain {
             vec!()
         );
         
-        let ability = r1.add_ability(ability);
+        let _ability = r1.add_ability(ability);
 
         let r1 = m.add_item(SPItem::Resource(r1)).global_path().clone().unwrap();
     
 
-        let resource = if let Some(SPItemRef::Resource(r)) = m.find(&r1.to_sp()) {Some(r)} else {None};
+        let resource = if let Some(SPItemRef::Resource(r)) = m.get(&r1.to_sp()) {Some(r)} else {None};
         println!("");
         println!("resource: {:?}", resource);
         println!("");
 
-        if let Some(SPItemRef::Resource(r)) = m.find(&r1.to_sp()) {
-            let a_again = r.find(&a.to_sp());
+        if let Some(SPItemRef::Resource(r)) = m.get(&r1.to_sp()) {
+            let a_again = r.get(&a.to_sp());
             println!("the resource {:?}", r);
             println!("the a {:?}", a_again);
         }
@@ -176,37 +190,7 @@ mod tests_domain {
         println!("{:?}", m);
     }
 
-    #[test]
-    fn find() {
-        let mut m = Model::new("m", vec!(
-            SPItem::Model(Model::new("a", vec!(
-                SPItem::Model(Model::new("b", vec!())),
-                SPItem::Model(Model::new("c", vec!(
-                    SPItem::Model(Model::new("d", vec!()))
-                )))
-            ))),
-            SPItem::Model(Model::new("k", vec!(
-                SPItem::Model(Model::new("l", vec!()))
-            )))
-        ));
 
-        m.update_path(&SPPaths::new(None, Some(GlobalPath::new())));
-
-        let g_ab = SPPath::from_array_to_global(&["m", "a", "b"]);
-        let g_acd = SPPath::from_array_to_global(&["m", "a", "c", "d"]);
-        let g_k = SPPath::from_array_to_global(&["m", "k"]);
-        let ab = m.find(&g_ab);
-        let acd = m.find(&g_acd);
-        let k = m.find(&g_k);
-
-        println!("{:?}", &ab);
-        println!("{:?}", &acd);
-        println!("{:?}", &k);
-
-        assert!(ab.unwrap().name() == "b");
-        assert!(acd.unwrap().name() == "d");
-        assert!(k.unwrap().name() == "k");
-    }
 }
 
 

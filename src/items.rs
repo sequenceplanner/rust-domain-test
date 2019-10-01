@@ -57,17 +57,30 @@ impl Noder for SPItem {
             SPItem::IfThen(ref mut x) => x.node_mut(),
         }
     }
-    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+    fn get_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
         match self {
-            SPItem::Model(x) => x.find_child(next, path),
-            SPItem::Resource(x) => x.find_child(next, path),
-            SPItem::Message(x) => x.find_child(next, path),
-            SPItem::Topic(x) => x.find_child(next, path),
-            SPItem::Variable(x) => x.find_child(next, path),
-            SPItem::Operation(x) => x.find_child(next, path),
-            SPItem::Ability(x) => x.find_child(next, path),
-            SPItem::Transition(x) => x.find_child(next, path),
-            SPItem::IfThen(x) => x.find_child(next, path),
+            SPItem::Model(x) => x.get_child(next, path),
+            SPItem::Resource(x) => x.get_child(next, path),
+            SPItem::Message(x) => x.get_child(next, path),
+            SPItem::Topic(x) => x.get_child(next, path),
+            SPItem::Variable(x) => x.get_child(next, path),
+            SPItem::Operation(x) => x.get_child(next, path),
+            SPItem::Ability(x) => x.get_child(next, path),
+            SPItem::Transition(x) => x.get_child(next, path),
+            SPItem::IfThen(x) => x.get_child(next, path),
+        }
+    }
+    fn find_item_among_childs<'a>(&'a self, name: &str) -> Option<SPItemRef<'a>> {
+        match self {
+            SPItem::Model(x) => x.find_item_among_childs(name),
+            SPItem::Resource(x) => x.find_item_among_childs(name),
+            SPItem::Message(x) => x.find_item_among_childs(name),
+            SPItem::Topic(x) => x.find_item_among_childs(name),
+            SPItem::Variable(x) => x.find_item_among_childs(name),
+            SPItem::Operation(x) => x.find_item_among_childs(name),
+            SPItem::Ability(x) => x.find_item_among_childs(name),
+            SPItem::Transition(x) => x.find_item_among_childs(name),
+            SPItem::IfThen(x) => x.find_item_among_childs(name),
         }
     }
     fn update_path_children(&mut self, paths: &SPPaths) {
@@ -131,8 +144,11 @@ impl Noder for Model {
         &self.node
     }
     fn node_mut(&mut self) -> &mut SPNode { &mut self.node}
-    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
-        find_in_list(self.items.as_slice(), next, path)
+    fn get_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        get_from_list(self.items.as_slice(), next, path)
+    }
+    fn find_item_among_childs<'a>(&'a self, name: &str) -> Option<SPItemRef<'a>> {
+        find_item_in_list(self.items.as_slice(), name)
     }
     fn update_path_children(&mut self, paths: &SPPaths) {
         update_path_in_list(self.items.as_mut_slice(), paths);
@@ -181,12 +197,21 @@ impl Noder for Resource {
         &self.node
     }
     fn node_mut(&mut self) -> &mut SPNode { &mut self.node}
-    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
-        let res = find_in_list(self.abilities.as_slice(), next, path);
+    fn get_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        let res = get_from_list(self.abilities.as_slice(), next, path);
         if res.is_some() {return res};
-        let res = find_in_list(self.parameters.as_slice(), next, path);
+        let res = get_from_list(self.parameters.as_slice(), next, path);
         if res.is_some() {return res};
-        let res = find_in_list(self.messages.as_slice(), next, path);
+        let res = get_from_list(self.messages.as_slice(), next, path);
+        
+        return res
+    }
+    fn find_item_among_childs<'a>(&'a self, name: &str) -> Option<SPItemRef<'a>> {
+        let res = find_item_in_list(self.abilities.as_slice(), name);
+        if res.is_some() {return res};
+        let res = find_item_in_list(self.parameters.as_slice(), name);
+        if res.is_some() {return res};
+        let res = find_item_in_list(self.messages.as_slice(), name);
         
         return res
     }
@@ -248,9 +273,12 @@ impl Noder for Topic {
         &self.node
     }
     fn node_mut(&mut self) -> &mut SPNode { &mut self.node}
-    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+    fn get_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
         if self.msg.name() != next {return None}
-        self.msg.find(path)
+        self.msg.get(path)
+    }
+    fn find_item_among_childs<'a>(&'a self, name: &str) -> Option<SPItemRef<'a>> {
+        self.msg.find_item(name)
     }
     fn update_path_children(&mut self, paths: &SPPaths) { 
         self.msg.update_path(paths);
@@ -281,8 +309,11 @@ impl Noder for Message {
         &self.node
     }
     fn node_mut(&mut self) -> &mut SPNode { &mut self.node}
-    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
-        find_in_list(self.fields.as_slice(), next, path)
+    fn get_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        get_from_list(self.fields.as_slice(), next, path)
+    }
+    fn find_item_among_childs<'a>(&'a self, name: &str) -> Option<SPItemRef<'a>> {
+        find_item_in_list(self.fields.as_slice(), name)
     }
     fn update_path_children(&mut self, paths: &SPPaths) { 
         update_path_in_list(self.fields.as_mut_slice(), paths);
@@ -323,10 +354,16 @@ impl Noder for MessageField {
         }
     }
     
-    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+    fn get_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
         match self {
-            MessageField::Msg(ref x) => x.find_child(next, path),
-            MessageField::Var(ref x) => x.find_child(next, path),
+            MessageField::Msg(ref x) => x.get_child(next, path),
+            MessageField::Var(ref x) => x.get_child(next, path),
+        }
+    }
+    fn find_item_among_childs<'a>(&'a self, name: &str) -> Option<SPItemRef<'a>> {
+        match self {
+            MessageField::Msg(ref x) => x.find_item(name),
+            MessageField::Var(ref x) => x.find_item(name),
         }
     }
     fn update_path_children(&mut self, paths: &SPPaths) { 
@@ -363,7 +400,10 @@ impl Noder for Variable {
         &self.node
     }
     fn node_mut(&mut self) -> &mut SPNode { &mut self.node}
-    fn find_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
+    fn get_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
+        None
+    }
+    fn find_item_among_childs<'a>(&'a self, _name: &str) -> Option<SPItemRef<'a>> {
         None
     }
     fn update_path_children(&mut self, _paths: &SPPaths) {}
@@ -431,7 +471,10 @@ impl Noder for Transition {
         &self.node
     }
     fn node_mut(&mut self) -> &mut SPNode { &mut self.node}
-    fn find_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
+    fn get_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
+        None
+    }
+    fn find_item_among_childs<'a>(&'a self, _name: &str) -> Option<SPItemRef<'a>> {
         None
     }
     fn update_path_children(&mut self, _paths: &SPPaths) { }
@@ -485,12 +528,20 @@ impl Noder for Ability {
         &self.node
     }
     fn node_mut(&mut self) -> &mut SPNode { &mut self.node}
-    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
-        let res = find_in_list(self.controlled.as_slice(), next, path);
+    fn get_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        let res = get_from_list(self.controlled.as_slice(), next, path);
         if res.is_some() {return res};
-        let res = find_in_list(self.uncontrolled.as_slice(), next, path);
+        let res = get_from_list(self.uncontrolled.as_slice(), next, path);
         if res.is_some() {return res};
-        let res = find_in_list(self.predicates.as_slice(), next, path);
+        let res = get_from_list(self.predicates.as_slice(), next, path);
+        return res;
+    }
+    fn find_item_among_childs<'a>(&'a self, name: &str) -> Option<SPItemRef<'a>> {
+        let res = find_item_in_list(self.controlled.as_slice(), name);
+        if res.is_some() {return res};
+        let res = find_item_in_list(self.uncontrolled.as_slice(), name);
+        if res.is_some() {return res};
+        let res = find_item_in_list(self.predicates.as_slice(), name);
         return res;
     }
     fn update_path_children(&mut self, paths: &SPPaths) { 
@@ -535,18 +586,32 @@ impl Noder for Operation {
         &self.node
     }
     fn node_mut(&mut self) -> &mut SPNode { &mut self.node}
-    fn find_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
-        let res = find_in_list(self.precondition.as_slice(), next, path);
+    fn get_child<'a>(&'a self, next: &str, path: &SPPath) -> Option<SPItemRef<'a>> {
+        let res = get_from_list(self.precondition.as_slice(), next, path);
         if res.is_some() {return res};
-        let res = find_in_list(self.postcondition.as_slice(), next, path);
+        let res = get_from_list(self.postcondition.as_slice(), next, path);
         if res.is_some() {return res};
-        let res = find_in_list(self.uncontrolled.as_slice(), next, path);
+        let res = get_from_list(self.uncontrolled.as_slice(), next, path);
         if res.is_some() {return res};
-        let res = find_in_list(self.predicates.as_slice(), next, path);
+        let res = get_from_list(self.predicates.as_slice(), next, path);
         if res.is_some() {return res};
-        let res = self.goal.as_ref().and_then(|x| x.find(path));
+        let res = self.goal.as_ref().and_then(|x| x.get(path));
         if res.is_some() {return res};
-        let res = self.invariant.as_ref().and_then(|ref x| x.find(path));
+        let res = self.invariant.as_ref().and_then(|ref x| x.get(path));
+        return res;
+    }
+    fn find_item_among_childs<'a>(&'a self, name: &str) -> Option<SPItemRef<'a>> {
+        let res = find_item_in_list(self.precondition.as_slice(), name);
+        if res.is_some() {return res};
+        let res = find_item_in_list(self.postcondition.as_slice(), name);
+        if res.is_some() {return res};
+        let res = find_item_in_list(self.uncontrolled.as_slice(), name);
+        if res.is_some() {return res};
+        let res = find_item_in_list(self.predicates.as_slice(), name);
+        if res.is_some() {return res};
+        let res = self.goal.as_ref().and_then(|x| x.find_item(name));
+        if res.is_some() {return res};
+        let res = self.invariant.as_ref().and_then(|ref x| x.find_item(name));
         return res;
     }
     fn update_path_children(&mut self, paths: &SPPaths) { 
@@ -599,7 +664,10 @@ impl Noder for IfThen {
         &self.node
     }
     fn node_mut(&mut self) -> &mut SPNode { &mut self.node}
-    fn find_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
+    fn get_child<'a>(&'a self, _: &str, _: &SPPath) -> Option<SPItemRef<'a>> {
+        None
+    }
+    fn find_item_among_childs<'a>(&'a self, _name: &str) -> Option<SPItemRef<'a>> {
         None
     }
     fn update_path_children(&mut self, _paths: &SPPaths) { }
