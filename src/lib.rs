@@ -20,12 +20,10 @@ pub use node::*;
 pub mod items;
 pub use items::*;
 
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
-
 
 type SPResult<T> = std::result::Result<T, SPError>;
 
@@ -62,15 +60,12 @@ impl error::Error for SPError {
     }
 }
 
-
-
-
 #[cfg(test)]
 mod tests_domain {
     use super::*;
     #[test]
     fn making() {
-        let mut m = Model::new_root("model", vec!());
+        let mut m = Model::new_root("model", vec![]);
         let mut r1 = Resource::new("r1");
 
         let test = MessageField::Var(Variable::new_boolean("kalle", VariableType::Measured));
@@ -80,104 +75,133 @@ mod tests_domain {
         println!("testing n {:?}", t);
         //r1.add_message(t);
 
-        let msg_to_robot = Topic::new("cmd", MessageField::Msg(
-            Message::new(name: &str, fields: Vec<MessageField>)
-        ))
-
-
-
-        
-        let a = Topic::new("act", MessageField::Var(Variable::new(
-            "data", 
-            VariableType::Measured, 
-            SPValueType::Int32,
-            0.to_spvalue(), 
-            vec!(0.to_spvalue(), 10.to_spvalue())
-        )));
-        let r = Topic::new("ref", MessageField::Var(Variable::new(
-            "data", 
-            VariableType::Command, 
-            SPValueType::Int32,
-            0.to_spvalue(), 
-            vec!(0.to_spvalue(), 10.to_spvalue())
-        )));
-        let active = Topic::new("active", MessageField::Var(Variable::new_boolean(
-            "data", 
-            VariableType::Measured
-        )));
-        let activate = Topic::new("activate", MessageField::Var(Variable::new_boolean(
-            "data", 
-            VariableType::Command, 
-        )));
-
-        let mut a = r1.add_message(a).local_path().clone().unwrap();
-        a.add("data".to_string());
-        let mut r = r1.add_message(r).local_path().clone().unwrap();
-        r.add("data".to_string());
-        let mut active = r1.add_message(active).local_path().clone().unwrap();
-        active.add("data".to_string());
-        let mut activate = r1.add_message(activate).local_path().clone().unwrap();
-        activate.add("data".to_string());
-
-        
-
-        let name = "r1";
-        let upper = 10;
-        let to_upper = Transition::new(
-            &format!("{}_to_upper", name),
-            p!(a == 0), // p!(r != upper), // added req on a == 0 just for testing
-            vec!(a!(r = upper)),
-            vec!(a!(a = upper)),
+        let robot_cmd = Message::new_with_type(
+            "robot_cmd",
+            "robot_cmd",
+            vec![
+                MessageField::Var(Variable::new(
+                    "ref",
+                    VariableType::Command,
+                    SPValueType::Int32,
+                    0.to_spvalue(),
+                    vec![0.to_spvalue(), 10.to_spvalue()],
+                )),
+                MessageField::Var(Variable::new_boolean("activate", VariableType::Command)),
+            ],
         );
-        let to_lower = Transition::new(
-            &format!("{}_to_lower", name),
-            p!(a == upper), // p!(r != 0), // added req on a == upper just for testing
-            vec!(a!(r = 0)),
-            vec!(a!(a = 0)),
+        let robot_state = Message::new_with_type(
+            "robot_state",
+            "robot_state",
+            vec![
+                MessageField::Var(Variable::new(
+                    "act",
+                    VariableType::Measured,
+                    SPValueType::Int32,
+                    0.to_spvalue(),
+                    vec![0.to_spvalue(), 10.to_spvalue()],
+                )),
+                MessageField::Var(Variable::new_boolean("active", VariableType::Measured)),
+                MessageField::Msg(robot_cmd.instantiate("echo")),
+            ],
         );
-        let t_activate = Transition::new(
-            &format!("{}_activate", name),
-            p!(!active),
-            vec!(a!(activate)),
-            vec!(a!(active)),
-        );
-        let t_deactivate = Transition::new(
-            &format!("{}_deactivate", name),
-            p!(active),
-            vec!(a!(!activate)),
-            vec!(a!(!active)),
-        );
+        r1.add_message(Topic::new("cmd", MessageField::Msg(robot_cmd)));
+        r1.add_message(Topic::new("state", MessageField::Msg(robot_state)));
 
-        let ability = Ability::new(
-            "all", 
-            vec!(t_activate, t_deactivate), 
-            vec!(to_upper, to_lower), 
-            vec!()
-        );
-        
-        let _ability = r1.add_ability(ability);
+        let v_ref = r1.find_item("ref", &["robot_cmd"]).unwrap();
+        let v_activate = r1.find_item("activate", &["robot_cmd"]).unwrap();
+        let v_ref_echo = r1.find_item("ref", &["echo"]).unwrap();
+        let v_activate_echo = r1.find_item("activate", &["echo"]).unwrap();
+        let v_act = r1.find_item("act", &["robot_state"]).unwrap();
+        let v_active = r1.find_item("active", &["robot_state"]).unwrap();
 
-        let r1 = m.add_item(SPItem::Resource(r1)).global_path().clone().unwrap();
-    
+        println!("v_ref: {:?}", v_ref);
+        println!("v_activate: {:?}", v_activate);
+        println!("v_ref_echo: {:?}", v_ref_echo);
+        println!("v_activate_echo: {:?}", v_activate_echo);
+        println!("v_act: {:?}", v_act);
+        println!("v_active: {:?}", v_active);
 
-        let resource = if let Some(SPItemRef::Resource(r)) = m.get(&r1.to_sp()) {Some(r)} else {None};
-        println!("");
-        println!("resource: {:?}", resource);
-        println!("");
+        // let a = Topic::new("act", MessageField::Var(Variable::new(
+        //     "data",
+        //     VariableType::Measured,
+        //     SPValueType::Int32,
+        //     0.to_spvalue(),
+        //     vec!(0.to_spvalue(), 10.to_spvalue())
+        // )));
+        // let r = Topic::new("ref", MessageField::Var(Variable::new(
+        //     "data",
+        //     VariableType::Command,
+        //     SPValueType::Int32,
+        //     0.to_spvalue(),
+        //     vec!(0.to_spvalue(), 10.to_spvalue())
+        // )));
+        // let active = Topic::new("active", MessageField::Var(Variable::new_boolean(
+        //     "data",
+        //     VariableType::Measured
+        // )));
+        // let activate = Topic::new("activate", MessageField::Var(Variable::new_boolean(
+        //     "data",
+        //     VariableType::Command,
+        // )));
 
-        if let Some(SPItemRef::Resource(r)) = m.get(&r1.to_sp()) {
-            let a_again = r.get(&a.to_sp());
-            println!("the resource {:?}", r);
-            println!("the a {:?}", a_again);
-        }
+        // let mut a = r1.add_message(a).local_path().clone().unwrap();
+        // a.add("data".to_string());
+        // let mut r = r1.add_message(r).local_path().clone().unwrap();
+        // r.add("data".to_string());
+        // let mut active = r1.add_message(active).local_path().clone().unwrap();
+        // active.add("data".to_string());
+        // let mut activate = r1.add_message(activate).local_path().clone().unwrap();
+        // activate.add("data".to_string());
 
-        
+        // let name = "r1";
+        // let upper = 10;
+        // let to_upper = Transition::new(
+        //     &format!("{}_to_upper", name),
+        //     p!(a == 0), // p!(r != upper), // added req on a == 0 just for testing
+        //     vec!(a!(r = upper)),
+        //     vec!(a!(a = upper)),
+        // );
+        // let to_lower = Transition::new(
+        //     &format!("{}_to_lower", name),
+        //     p!(a == upper), // p!(r != 0), // added req on a == upper just for testing
+        //     vec!(a!(r = 0)),
+        //     vec!(a!(a = 0)),
+        // );
+        // let t_activate = Transition::new(
+        //     &format!("{}_activate", name),
+        //     p!(!active),
+        //     vec!(a!(activate)),
+        //     vec!(a!(active)),
+        // );
+        // let t_deactivate = Transition::new(
+        //     &format!("{}_deactivate", name),
+        //     p!(active),
+        //     vec!(a!(!activate)),
+        //     vec!(a!(!active)),
+        // );
 
+        // let ability = Ability::new(
+        //     "all",
+        //     vec!(t_activate, t_deactivate),
+        //     vec!(to_upper, to_lower),
+        //     vec!()
+        // );
 
+        // let _ability = r1.add_ability(ability);
 
-        
+        // let r1 = m.add_item(SPItem::Resource(r1)).global_path().clone().unwrap();
 
-        
+        // let resource = if let Some(SPItemRef::Resource(r)) = m.get(&r1.to_sp()) {Some(r)} else {None};
+        // println!("");
+        // println!("resource: {:?}", resource);
+        // println!("");
+
+        // if let Some(SPItemRef::Resource(r)) = m.get(&r1.to_sp()) {
+        //     let a_again = r.get(&a.to_sp());
+        //     println!("the resource {:?}", r);
+        //     println!("the a {:?}", a_again);
+        // }
+
         // let n = SPItem::Model(Model{
         //     node: SPNode::new("n"),
         //     items: vec!()
@@ -186,13 +210,7 @@ mod tests_domain {
         // if let SPItem::Model(ref mut my) = m {
         //     my.add_item(n);
         // }
-        
+
         println!("{:?}", m);
     }
-
-
 }
-
-
-
-

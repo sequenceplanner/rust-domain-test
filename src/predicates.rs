@@ -359,33 +359,33 @@ macro_rules! a {
     ($var:ident) => {
         Action {
             var: $var.to_sp(),
-            value: $crate::predicates::Compute::PredicateValue($crate::predicates::PredicateValue::SPValue(
-                true.to_spvalue(),
-            )),
+            value: $crate::predicates::Compute::PredicateValue(
+                $crate::predicates::PredicateValue::SPValue(true.to_spvalue()),
+            ),
         }
     };
     (!$var:ident) => {
         Action {
             var: $var.to_sp(),
-            value: $crate::predicates::Compute::PredicateValue($crate::predicates::PredicateValue::SPValue(
-                false.to_spvalue(),
-            )),
+            value: $crate::predicates::Compute::PredicateValue(
+                $crate::predicates::PredicateValue::SPValue(false.to_spvalue()),
+            ),
         }
     };
     ($var:ident = $val:expr) => {
         Action {
             var: $var.to_sp(),
-            value: $crate::predicates::Compute::PredicateValue($crate::predicates::PredicateValue::SPValue(
-                $val.to_spvalue(),
-            )),
+            value: $crate::predicates::Compute::PredicateValue(
+                $crate::predicates::PredicateValue::SPValue($val.to_spvalue()),
+            ),
         }
     };
     ($var:ident <- $val:expr) => {
         Action {
             var: $var.clone(),
-            value: $crate::predicates::Compute::PredicateValue($crate::predicates::PredicateValue::SPPath(
-                $val.clone(),
-            )),
+            value: $crate::predicates::Compute::PredicateValue(
+                $crate::predicates::PredicateValue::SPPath($val.clone()),
+            ),
         }
     };
     ($var:ident ? $val:expr) => {

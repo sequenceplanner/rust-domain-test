@@ -297,5 +297,4 @@ mod sp_value_test {
         assert!(y.is_type(SPValueType::Int32));
         assert!(z.is_type(SPValueType::String));
     }
-
 }
