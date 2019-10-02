@@ -78,7 +78,7 @@ pub trait Noder {
         path_sections: &[&str],
     ) -> Option<SPItemRef<'a>>;
     fn update_path_children(&mut self, paths: &SPPaths);
-    fn as_ref<'a>(&'a self) -> SPItemRef<'a>;
+    fn as_ref(&self) -> SPItemRef<'_>;
     fn paths(&self) -> &SPPaths {
         self.node().paths()
     }
@@ -108,11 +108,8 @@ pub trait Noder {
         if self.node().is_eq(path) {
             return Some(self.as_ref());
         }
-        let next = self.node().next_node_in_path(path);
-        if next.is_none() {
-            return None;
-        }
-        self.get_child(&next.unwrap(), path)
+        let next = self.node().next_node_in_path(path)?;
+        self.get_child(&next, path)
     }
     /// Finds the first item with a specific name and that includes all path sections (in any order).
     fn find_item<'a>(&'a self, name: &str, path_sections: &[&str]) -> Option<SPItemRef<'a>> {
@@ -160,7 +157,7 @@ where
             }
         }
     }
-    return None;
+    None
 }
 
 /// A method used by the items when impl the Noder trait
@@ -180,7 +177,7 @@ where
             return res;
         }
     }
-    return None;
+    None
 }
 
 /// A method used by the items when impl the Noder trait

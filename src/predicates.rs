@@ -137,8 +137,7 @@ impl EvaluatePredicate for Predicate {
             Predicate::XOR(ps) => {
                 ps.iter()
                     .filter(|p| p.eval(state))
-                    .collect::<Vec<_>>()
-                    .len()
+                    .count()
                     == 1
             }
             Predicate::NOT(p) => !p.eval(state),

@@ -79,18 +79,18 @@ impl SPPath {
         SPPath::LocalPath(LocalPath::from(v))
     }
     pub fn from_string(s: &str) -> SPResult<SPPath> {
-        let what_type: Vec<&str> = s.split(":").collect();
+        let what_type: Vec<&str> = s.split(':').collect();
 
         match what_type.as_slice() {
             ["L", tail] => {
-                let res: Vec<&str> = tail.split("/").collect();
-                return Ok(SPPath::from_array(&res));
+                let res: Vec<&str> = tail.split('/').collect();
+                Ok(SPPath::from_array(&res))
             }
             ["G", tail] if tail != &"" => {
-                let res: Vec<&str> = tail.split("/").filter(|x| !x.is_empty()).collect();
-                return Ok(SPPath::from_array_to_global(&res));
+                let res: Vec<&str> = tail.split('/').filter(|x| !x.is_empty()).collect();
+                Ok(SPPath::from_array_to_global(&res))
             }
-            _ => return Err(SPError::No(format!("Can not convert {} into a path", s))),
+            _ => Err(SPError::No(format!("Can not convert {} into a path", s)))
         }
     }
     pub fn from_to_global(n: &[String]) -> SPPath {
@@ -252,12 +252,12 @@ impl std::fmt::Display for SPPaths {
             .local
             .as_ref()
             .map(|x| format!("{}", x))
-            .unwrap_or("".to_string());
+            .unwrap_or_else(|| "".to_string());
         let g: String = self
             .global
             .as_ref()
             .map(|x| format!("{}", x))
-            .unwrap_or("".to_string());
+            .unwrap_or_else(|| "".to_string());
         write!(f, "<{},{}>", l, g)
     }
 }

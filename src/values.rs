@@ -84,8 +84,8 @@ impl SPValue {
 }
 
 impl SPValueType {
-    pub fn is_type(&self, v: &SPValue) -> bool {
-        v.is_type(*self)
+    pub fn is_type(self, v: &SPValue) -> bool {
+        v.is_type(self)
     }
 }
 
@@ -202,7 +202,7 @@ where
 }
 impl ToSPValue for Vec<SPValue> {
     fn to_spvalue(&self) -> SPValue {
-        if self.len() == 0 {
+        if self.is_empty() {
             SPValue::Array(SPValueType::Unknown, self.clone())
         } else {
             let spvaltype = self[0].has_type();
