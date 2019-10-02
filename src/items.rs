@@ -16,20 +16,6 @@ pub enum SPItem {
     //SOP(SOP),
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum SPItemRef<'a> {
-    Model(&'a Model),
-    Resource(&'a Resource),
-    Message(&'a Message),
-    Topic(&'a Topic),
-    Variable(&'a Variable),
-    Operation(&'a Operation),
-    Ability(&'a Ability),
-    Transition(&'a Transition),
-    IfThen(&'a IfThen),
-    //SOP(SOP),
-}
-
 impl Noder for SPItem {
     fn node(&self) -> &SPNode {
         match self {
@@ -115,6 +101,20 @@ impl Noder for SPItem {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum SPItemRef<'a> {
+    Model(&'a Model),
+    Resource(&'a Resource),
+    Message(&'a Message),
+    Topic(&'a Topic),
+    Variable(&'a Variable),
+    Operation(&'a Operation),
+    Ability(&'a Ability),
+    Transition(&'a Transition),
+    IfThen(&'a IfThen),
+    //SOP(SOP),
+}
+
 impl<'a> SPItemRef<'a> {
     pub fn node(&self) -> &SPNode {
         match self {
@@ -129,10 +129,77 @@ impl<'a> SPItemRef<'a> {
             SPItemRef::IfThen(x) => &x.node,
         }
     }
+    pub fn item(&self) -> SPItem {
+        match self {
+            SPItemRef::Model(x) => SPItem::Model({*x}.clone()),
+            SPItemRef::Resource(x) => SPItem::Resource({*x}.clone()),
+            SPItemRef::Message(x) => SPItem::Message({*x}.clone()),
+            SPItemRef::Topic(x) => SPItem::Topic({*x}.clone()),
+            SPItemRef::Variable(x) => SPItem::Variable({*x}.clone()),
+            SPItemRef::Operation(x) => SPItem::Operation({*x}.clone()),
+            SPItemRef::Ability(x) => SPItem::Ability({*x}.clone()),
+            SPItemRef::Transition(x) => SPItem::Transition({*x}.clone()),
+            SPItemRef::IfThen(x) => SPItem::IfThen({*x}.clone()),
+        }
+    }
     pub fn name(&self) -> &str {
         self.node().name()
     }
 }
+
+
+/// A trait for unwrapping SPItemRefs and cloning the items
+pub trait SPItemUnwrapper {
+    fn item(&self) -> SPItem;
+    fn local_path(&self) -> Option<LocalPath> {
+        self.item().node().local_path().clone()
+    }
+    fn unwrap_local_path(&self) -> LocalPath {
+        self.local_path().unwrap()
+    }
+    fn global_path(&self) -> Option<GlobalPath> {
+        self.item().node().global_path().clone()
+    }
+    fn unwrap_global_path(&self) -> GlobalPath {
+        self.global_path().unwrap()
+    }
+    fn as_variable(&self) -> Option<Variable> {
+        if let SPItem::Variable(x) = self.item() { Some(x) } else { None }
+    }
+    fn unwrap_variable(&self) -> Variable {
+        self.as_variable().unwrap()
+    }
+    fn as_resource(&self) -> Option<Resource> {
+        if let SPItem::Resource(x) = self.item() { Some(x) } else { None }
+    }
+    fn unwrap_resource(&self) -> Resource {
+        self.as_resource().unwrap()
+    }
+    // Add items here when needed
+}
+
+impl SPItemUnwrapper for SPItemRef<'_> {
+    fn item(&self) -> SPItem {
+        self.item()
+    }
+}
+
+impl SPItemUnwrapper for Option<SPItemRef<'_>> {
+    fn item(&self) -> SPItem {
+        self.clone().unwrap().item()
+    }
+}
+
+impl SPItemUnwrapper for SPItem {
+    fn item(&self) -> SPItem {
+        self.clone()
+    }
+}
+
+
+// ####################
+// Items below
+
 
 #[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize)]
 pub struct Model {

@@ -61,6 +61,7 @@ impl error::Error for SPError {
     }
 }
 
+
 #[cfg(test)]
 mod tests_domain {
     use super::*;
@@ -108,12 +109,14 @@ mod tests_domain {
         r1.add_message(Topic::new("cmd", MessageField::Msg(robot_cmd)));
         r1.add_message(Topic::new("state", MessageField::Msg(robot_state)));
 
-        let v_ref = r1.find_item("ref", &["robot_cmd"]).unwrap();
-        let v_activate = r1.find_item("activate", &["robot_cmd"]).unwrap();
-        let v_ref_echo = r1.find_item("ref", &["echo"]).unwrap();
-        let v_activate_echo = r1.find_item("activate", &["echo"]).unwrap();
-        let v_act = r1.find_item("act", &["robot_state"]).unwrap();
-        let v_active = r1.find_item("active", &["robot_state"]).unwrap();
+        
+
+        let v_ref = r1.find_item("ref", &["robot_cmd"]).unwrap().node().local_path().clone().unwrap();  // this is kept here just to show what unwrap_local_path() is doing
+        let v_activate = r1.find_item("activate", &["robot_cmd"]).unwrap_local_path();
+        let v_ref_echo = r1.find_item("ref", &["echo"]).unwrap_local_path();
+        let v_activate_echo = r1.find_item("activate", &["echo"]).unwrap_local_path();
+        let v_act = r1.find_item("act", &["robot_state"]).unwrap_local_path();
+        let v_active = r1.find_item("active", &["robot_state"]).unwrap_local_path();
 
         println!("v_ref: {:?}", v_ref);
         println!("v_activate: {:?}", v_activate);
@@ -122,71 +125,40 @@ mod tests_domain {
         println!("v_act: {:?}", v_act);
         println!("v_active: {:?}", v_active);
 
-        // let a = Topic::new("act", MessageField::Var(Variable::new(
-        //     "data",
-        //     VariableType::Measured,
-        //     SPValueType::Int32,
-        //     0.to_spvalue(),
-        //     vec!(0.to_spvalue(), 10.to_spvalue())
-        // )));
-        // let r = Topic::new("ref", MessageField::Var(Variable::new(
-        //     "data",
-        //     VariableType::Command,
-        //     SPValueType::Int32,
-        //     0.to_spvalue(),
-        //     vec!(0.to_spvalue(), 10.to_spvalue())
-        // )));
-        // let active = Topic::new("active", MessageField::Var(Variable::new_boolean(
-        //     "data",
-        //     VariableType::Measured
-        // )));
-        // let activate = Topic::new("activate", MessageField::Var(Variable::new_boolean(
-        //     "data",
-        //     VariableType::Command,
-        // )));
 
-        // let mut a = r1.add_message(a).local_path().clone().unwrap();
-        // a.add("data".to_string());
-        // let mut r = r1.add_message(r).local_path().clone().unwrap();
-        // r.add("data".to_string());
-        // let mut active = r1.add_message(active).local_path().clone().unwrap();
-        // active.add("data".to_string());
-        // let mut activate = r1.add_message(activate).local_path().clone().unwrap();
-        // activate.add("data".to_string());
+        let name = "r1";
+        let upper = 10;
+        let to_upper = Transition::new(
+            &format!("{}_to_upper", name),
+            p!(v_act == 0), // p!(r != upper), // added req on v_act== 0 just for testing
+            vec!(a!(v_ref = upper)),
+            vec!(a!(v_act = upper)),
+        );
+        let to_lower = Transition::new(
+            &format!("{}_to_lower", name),
+            p!(v_act == upper), // p!(r != 0), // added req on v_act == upper just for testing
+            vec!(a!(v_ref = 0)),
+            vec!(a!(v_act= 0)),
+        );
+        let t_activate = Transition::new(
+            &format!("{}_activate", name),
+            p!(!v_active),
+            vec!(a!(v_activate)),
+            vec!(a!(v_active)),
+        );
+        let t_deactivate = Transition::new(
+            &format!("{}_deactivate", name),
+            p!(v_active),
+            vec!(a!(!v_activate)),
+            vec!(a!(!v_active)),
+        );
 
-        // let name = "r1";
-        // let upper = 10;
-        // let to_upper = Transition::new(
-        //     &format!("{}_to_upper", name),
-        //     p!(a == 0), // p!(r != upper), // added req on a == 0 just for testing
-        //     vec!(a!(r = upper)),
-        //     vec!(a!(a = upper)),
-        // );
-        // let to_lower = Transition::new(
-        //     &format!("{}_to_lower", name),
-        //     p!(a == upper), // p!(r != 0), // added req on a == upper just for testing
-        //     vec!(a!(r = 0)),
-        //     vec!(a!(a = 0)),
-        // );
-        // let t_activate = Transition::new(
-        //     &format!("{}_activate", name),
-        //     p!(!active),
-        //     vec!(a!(activate)),
-        //     vec!(a!(active)),
-        // );
-        // let t_deactivate = Transition::new(
-        //     &format!("{}_deactivate", name),
-        //     p!(active),
-        //     vec!(a!(!activate)),
-        //     vec!(a!(!active)),
-        // );
-
-        // let ability = Ability::new(
-        //     "all",
-        //     vec!(t_activate, t_deactivate),
-        //     vec!(to_upper, to_lower),
-        //     vec!()
-        // );
+        let _ability = Ability::new(
+            "all",
+            vec!(t_activate, t_deactivate),
+            vec!(to_upper, to_lower),
+            vec!()
+        );
 
         // let _ability = r1.add_ability(ability);
 
